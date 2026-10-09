@@ -112,7 +112,7 @@ pub(crate) fn cycle_appearance(app: &mut PhotocraftApp, ctx: &egui::Context) {
 }
 
 fn system_theme(app: &PhotocraftApp, ctx: &egui::Context) -> Option<egui::Theme> {
-    app.services.system_theme.as_ref().and_then(|read| read()).or_else(|| ctx.system_theme())
+    app.services.system_theme.as_ref().and_then(|read| read(ctx)).or_else(|| ctx.system_theme())
 }
 
 // ------------------------------------------------------------------ lifecycle
@@ -229,9 +229,6 @@ pub fn tick(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let selected = selected_theme(&app.session.prefs().interface, system_theme(app, ctx));
     if app.ui.theme != selected {
         app.apply_theme(ctx, selected);
-    }
-    if app.session.prefs().interface.appearance_mode == AppearanceMode::Auto {
-        ctx.request_repaint_after(std::time::Duration::from_secs(1));
     }
     crate::theme::set_ui_font_size(ctx, app.session.prefs().interface.ui_font_size);
     presets_store(app);
@@ -716,9 +713,9 @@ pub fn apply(app: &mut PhotocraftApp, id: u64) -> Result<Value, String> {
 }
 
 /// Max dialog width for our dialogs.
-pub fn width(fields: &Map<String, Value>, available: f32) -> Option<f32> {
+pub fn width(fields: &Map<String, Value>) -> Option<f32> {
     match fields.get("__prefsui").and_then(Value::as_str)? {
-        "prefs" => Some(available.clamp(380.0, 1040.0)),
+        "prefs" => Some(780.0),
         "shortcuts" => Some(720.0),
         _ => Some(460.0),
     }
@@ -918,14 +915,13 @@ fn prefs_body(ui: &mut egui::Ui, f: &mut Map<String, Value>, system: Option<egui
                 }
             }
         });
-        let content_height = (ui.ctx().content_rect().height() - 240.0).clamp(240.0, 680.0);
-        crate::widgets::vline(ui, content_height);
+        crate::widgets::vline(ui, 420.0);
         ui.vertical(|ui| {
-            ui.set_width((ui.available_width() - 12.0).max(340.0));
+            ui.set_width(540.0);
             let title = SECTIONS.iter().find(|(id, _)| *id == section).map_or("General", |(_, t)| *t);
             ui.label(RichText::new(tl!(&title)).font(crate::theme::semibold(14.0)).color(t.text));
             ui.add_space(6.0);
-            egui::ScrollArea::vertical().max_height(content_height - 30.0).id_salt("prefs-scroll").show(ui, |ui| {
+            egui::ScrollArea::vertical().max_height(390.0).id_salt("prefs-scroll").show(ui, |ui| {
                 let order: Vec<String> =
                     f.get("__order").and_then(|o| o.get(&section)).and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
                 if !has_visible_fields(&values, &section) {
@@ -1685,7 +1681,7 @@ mod tests {
 
     #[test]
     fn appearance_resolves_both_saved_themes_and_follows_system() {
-        let mut interface = prefs::Interface::default();
+        let mut interface = prefs::Interface { appearance_mode: AppearanceMode::Auto, ..prefs::Interface::default() };
         assert_eq!(selected_theme(&interface, Some(egui::Theme::Dark)), ThemeKind::ProMedium);
         assert_eq!(selected_theme(&interface, Some(egui::Theme::Light)), ThemeKind::StudioLight);
         interface.dark_theme = DarkTheme::Studio;
@@ -1701,7 +1697,9 @@ mod tests {
     #[test]
     fn auto_uses_native_system_theme_when_egui_does_not_report_one() {
         let (mut app, _) = app_with_store();
-        app.services.system_theme = Some(Box::new(|| Some(egui::Theme::Light)));
+        app.services.system_theme = Some(Box::new(|_| Some(egui::Theme::Light)));
+        app.run("prefs.set", json!({"path": "interface.appearanceMode", "value": "auto"})).unwrap();
+        app.run("prefs.set", json!({"path": "interface.appearanceMode", "value": "auto"})).unwrap();
         let ctx = egui::Context::default();
         tick(&mut app, &ctx);
         assert_eq!(app.ui.theme, ThemeKind::StudioLight);
@@ -1713,7 +1711,7 @@ mod tests {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("prefs.set", json!({"values": {"interface.darkTheme": "studio", "interface.lightTheme": "classic"}})).unwrap();
         for (mode, visible) in
-            [(AppearanceMode::Light, ThemeKind::Classic), (AppearanceMode::Dark, ThemeKind::Studio), (AppearanceMode::Auto, ThemeKind::Studio)]
+            [(AppearanceMode::Auto, ThemeKind::Studio), (AppearanceMode::Light, ThemeKind::Classic), (AppearanceMode::Dark, ThemeKind::Studio)]
         {
             cycle_appearance(&mut app, &ctx);
             assert_eq!(app.session.prefs().interface.appearance_mode, mode);

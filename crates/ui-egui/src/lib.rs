@@ -220,7 +220,7 @@ pub type LoadTextFn = Box<dyn FnMut() -> Option<String>>;
 /// Persist the preferences text.
 pub type SaveTextFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 /// Platform appearance when egui cannot detect it (for example, Wayland without a theme event).
-pub type SystemThemeFn = Box<dyn Fn() -> Option<egui::Theme>>;
+pub type SystemThemeFn = Box<dyn Fn(&egui::Context) -> Option<egui::Theme>>;
 /// Autosave a document snapshot for crash recovery: (snapshot, revision, original path).
 pub type AutosaveFn = Box<dyn FnMut(&std::sync::Arc<Document>, u64, Option<&str>) -> Result<(), String>>;
 /// Poll successful or failed background writes: (document id, revision, result).

@@ -1,13 +1,20 @@
 //! Linux desktop colour scheme, including Wayland compositors that do not report a winit theme.
 
 #[cfg(target_os = "linux")]
-fn portal_theme() -> Option<egui::Theme> {
+const PORTAL_NAMESPACE: &str = "org.freedesktop.appearance";
+#[cfg(target_os = "linux")]
+const PORTAL_KEY: &str = "color-scheme";
+
+#[cfg(target_os = "linux")]
+fn portal_proxy() -> Option<zbus::blocking::Proxy<'static>> {
     let conn = zbus::blocking::connection::Builder::session().ok()?.method_timeout(std::time::Duration::from_secs(2)).build().ok()?;
-    let proxy =
-        zbus::blocking::Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Settings").ok()?;
-    let value: zbus::zvariant::OwnedValue = proxy.call("Read", &("org.freedesktop.appearance", "color-scheme")).ok()?;
-    let code = portal_code(value)?;
-    decode(code)
+    zbus::blocking::Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Settings").ok()
+}
+
+#[cfg(target_os = "linux")]
+fn portal_theme(proxy: &zbus::blocking::Proxy<'_>) -> Option<egui::Theme> {
+    let value: zbus::zvariant::OwnedValue = proxy.call("Read", &(PORTAL_NAMESPACE, PORTAL_KEY)).ok()?;
+    decode(portal_code(value)?)
 }
 
 #[cfg(target_os = "linux")]
@@ -32,9 +39,12 @@ fn decode(code: u32) -> Option<egui::Theme> {
     }
 }
 
+/// One-shot fallback for desktops without the settings portal. It runs once at start-up, by
+/// absolute path, and is never repeated.
 #[cfg(target_os = "linux")]
 fn gtk_theme() -> Option<egui::Theme> {
-    let output = std::process::Command::new("gsettings").args(["get", "org.gnome.desktop.interface", "color-scheme"]).output().ok()?;
+    let exe = ["/usr/bin/gsettings", "/bin/gsettings", "/usr/local/bin/gsettings"].into_iter().find(|p| std::path::Path::new(p).is_file())?;
+    let output = std::process::Command::new(exe).args(["get", "org.gnome.desktop.interface", "color-scheme"]).output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -50,28 +60,50 @@ fn parse_gtk_scheme(s: &str) -> Option<egui::Theme> {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn code_of(theme: Option<egui::Theme>) -> u8 {
+    match theme {
+        Some(egui::Theme::Dark) => 1,
+        Some(egui::Theme::Light) => 2,
+        None => 0,
+    }
+}
+
+/// Reads the colour scheme once, then follows the portal's `SettingChanged` signal. There is no
+/// polling: the worker sleeps in the signal iterator and wakes the UI only when the value changes.
 pub fn service() -> Option<photocraft_ui_egui::SystemThemeFn> {
     #[cfg(target_os = "linux")]
     {
         use std::sync::{
-            Arc,
+            Arc, OnceLock,
             atomic::{AtomicU8, Ordering},
         };
         let value = Arc::new(AtomicU8::new(0));
-        let worker_value = Arc::clone(&value);
+        let wake: Arc<OnceLock<egui::Context>> = Arc::new(OnceLock::new());
+        let (worker_value, worker_wake) = (Arc::clone(&value), Arc::clone(&wake));
         let (ready, wait) = std::sync::mpsc::channel();
         if std::thread::Builder::new()
             .name("appearance-portal".into())
             .spawn(move || {
-                loop {
-                    let code = match portal_theme().or_else(gtk_theme) {
-                        Some(egui::Theme::Dark) => 1,
-                        Some(egui::Theme::Light) => 2,
-                        None => 0,
+                let proxy = portal_proxy();
+                let initial = proxy.as_ref().and_then(portal_theme).or_else(gtk_theme);
+                worker_value.store(code_of(initial), Ordering::Relaxed);
+                let _ = ready.send(());
+                let Some(proxy) = proxy else { return };
+                let Ok(signals) = proxy.receive_signal("SettingChanged") else { return };
+                for message in signals {
+                    let Ok((namespace, key, changed)) = message.body().deserialize::<(String, String, zbus::zvariant::OwnedValue)>() else {
+                        continue;
                     };
-                    worker_value.store(code, Ordering::Relaxed);
-                    let _ = ready.send(());
-                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    if namespace != PORTAL_NAMESPACE || key != PORTAL_KEY {
+                        continue;
+                    }
+                    let code = code_of(portal_code(changed).and_then(decode));
+                    if worker_value.swap(code, Ordering::Relaxed) != code
+                        && let Some(ctx) = worker_wake.get()
+                    {
+                        ctx.request_repaint();
+                    }
                 }
             })
             .is_err()
@@ -79,7 +111,10 @@ pub fn service() -> Option<photocraft_ui_egui::SystemThemeFn> {
             return None;
         }
         let _ = wait.recv_timeout(std::time::Duration::from_millis(250));
-        Some(Box::new(move || decode(value.load(Ordering::Relaxed) as u32)))
+        Some(Box::new(move |ctx| {
+            let _ = wake.set(ctx.clone());
+            decode(u32::from(value.load(Ordering::Relaxed)))
+        }))
     }
     #[cfg(not(target_os = "linux"))]
     {

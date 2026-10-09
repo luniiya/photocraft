@@ -56,7 +56,7 @@ choice!(PointSize { PostScript = "postScript", Traditional = "traditional" } def
 choice!(Interpolation { BicubicAutomatic = "bicubicAutomatic", Nearest = "nearestNeighbor", Bilinear = "bilinear", Bicubic = "bicubic", BicubicSmoother = "bicubicSmoother", BicubicSharper = "bicubicSharper", PreserveDetails = "preserveDetails" } default BicubicAutomatic);
 choice!(ColorPicker { Adobe = "adobe", System = "system" } default Adobe);
 choice!(Theme { Pro = "pro", ProMedium = "proMedium", Studio = "studio", StudioLight = "studioLight", Classic = "classic" } default ProMedium);
-choice!(AppearanceMode { Auto = "auto", Dark = "dark", Light = "light" } default Auto);
+choice!(AppearanceMode { Auto = "auto", Dark = "dark", Light = "light" } default Dark);
 choice!(DarkTheme { Pro = "pro", ProMedium = "proMedium", Studio = "studio" } default ProMedium);
 choice!(LightTheme { StudioLight = "studioLight", Classic = "classic" } default StudioLight);
 choice!(CanvasColor { Default = "default", Black = "black", DarkGray = "darkGray", MediumGray = "mediumGray", LightGray = "lightGray", Custom = "custom" } default Default);
@@ -244,7 +244,7 @@ impl Default for Interface {
     fn default() -> Self {
         Self {
             theme: Theme::ProMedium,
-            appearance_mode: AppearanceMode::Auto,
+            appearance_mode: AppearanceMode::Dark,
             dark_theme: DarkTheme::ProMedium,
             light_theme: LightTheme::StudioLight,
             canvas_color: CanvasColor::Default,

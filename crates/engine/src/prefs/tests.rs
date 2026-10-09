@@ -25,7 +25,8 @@ fn defaults_match_photoshop() {
 #[test]
 fn appearance_defaults_and_legacy_theme_migrate() {
     let p = Preferences::default();
-    assert_eq!(p.interface.appearance_mode, AppearanceMode::Auto);
+    // New users keep Photoshop's default; following the system is opt-in.
+    assert_eq!(p.interface.appearance_mode, AppearanceMode::Dark);
     assert_eq!(p.interface.dark_theme, DarkTheme::ProMedium);
     assert_eq!(p.interface.light_theme, LightTheme::StudioLight);
     for (theme, mode, dark, light) in
