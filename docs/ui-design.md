@@ -11,6 +11,8 @@
 
 Switch themes with the sun icon, Window → Theme, or `ui.set {"theme":"classic"}` over the control channel.
 
+The toolbar's foreground and background colour chips follow the theme family. Pro and Classic draw Photoshop's overlapping squares with Default Colors and Switch Colors above them; Studio and Studio Light draw large round chips stacked vertically, with a small curved Switch Colors arrow right under them. There is no Default Colors button there (the D key and the Tools menu still reset the colours).
+
 ## Rules
 
 - **Colours and radii come from tokens.** Read them with `Tokens::get(ctx)`; never hard-code a colour in a widget.
