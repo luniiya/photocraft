@@ -4,12 +4,13 @@
 
 | Theme | Intent |
 |---|---|
-| **Pro** (default) | Photoshop-style Spectrum dark: flat charcoal panels (#323232), dark tab strips, Spectrum blue accent (#378ef0), pill buttons, checkboxes, compact 12 px type |
+| Pro | Photoshop-style Spectrum dark: flat charcoal panels (#323232), dark tab strips, Spectrum blue accent (#378ef0), pill buttons, checkboxes, compact 12 px type |
+| Pro Medium | Photoshop-style medium-gray panels and a dark canvas |
 | Studio | Dark studio style: near-black, rounded cards, pill tabs, violet accent, toggles |
 | Studio Light | Studio on light surfaces |
 | Classic | Windows-2000 bevels, square corners, navy selection |
 
-Switch themes with the sun icon, Window → Theme, or `ui.set {"theme":"classic"}` over the control channel.
+Edit → Preferences → Interface shows an Appearance Mode selector (Sync with system, Dark, Light) above separate light and dark theme cards with PhotoCraft editor previews and radio choices. Auto follows the operating system while the app is running, including the desktop portal on Linux Wayland and GSettings when the portal gives no answer. A missing system appearance falls back to Dark. New installs use Auto, Pro Medium and Studio Light. Existing saved single-theme preferences migrate to a fixed Dark or Light mode with their chosen theme. The header appearance button cycles Auto → Dark → Light; its icon shows a monitor, moon or sun for the selected mode. Window → Theme and `ui.set {"theme":"classic"}` select a theme and fix the mode to its light or dark family.
 
 ## Rules
 
