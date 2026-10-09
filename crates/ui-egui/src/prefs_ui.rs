@@ -97,9 +97,9 @@ fn selected_theme(interface: &prefs::Interface, system: Option<egui::Theme>) -> 
 
 pub(crate) fn cycle_appearance(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let next = match app.session.prefs().interface.appearance_mode {
-        AppearanceMode::Auto => AppearanceMode::Dark,
-        AppearanceMode::Dark => AppearanceMode::Light,
-        AppearanceMode::Light => AppearanceMode::Auto,
+        AppearanceMode::Auto => AppearanceMode::Light,
+        AppearanceMode::Light => AppearanceMode::Dark,
+        AppearanceMode::Dark => AppearanceMode::Auto,
     };
     if let Err(e) = app.run("prefs.set", json!({"path": "interface.appearanceMode", "value": next.name()})) {
         app.ui.status = e;
@@ -1713,7 +1713,7 @@ mod tests {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("prefs.set", json!({"values": {"interface.darkTheme": "studio", "interface.lightTheme": "classic"}})).unwrap();
         for (mode, visible) in
-            [(AppearanceMode::Dark, ThemeKind::Studio), (AppearanceMode::Light, ThemeKind::Classic), (AppearanceMode::Auto, ThemeKind::Studio)]
+            [(AppearanceMode::Light, ThemeKind::Classic), (AppearanceMode::Dark, ThemeKind::Studio), (AppearanceMode::Auto, ThemeKind::Studio)]
         {
             cycle_appearance(&mut app, &ctx);
             assert_eq!(app.session.prefs().interface.appearance_mode, mode);
