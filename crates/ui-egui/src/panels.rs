@@ -83,7 +83,7 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     // Two columns when the header chevron asks for them, or when one column doesn't fit.
     let slots: usize = sections.iter().map(Vec::len).sum();
     let double =
-        app.ui.panels.toolbar_double || toolbar_needs_double(slots, sections.len(), bx, t.pro, studio_chips(t.kind), ui.available_rect_before_wrap().height());
+        app.ui.panels.toolbar_double || toolbar_needs_double(slots, sections.len(), bx, t.pro, t.round_chips, ui.available_rect_before_wrap().height());
     let w = if double { w1 + bx + 2.0 } else { w1 };
     egui::Panel::left("toolbar").resizable(false).exact_size(w).frame(egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin::symmetric(m, 8))).show(
         ui,
@@ -246,7 +246,7 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 let _ = crate::menus::invoke(app, &ctx, "edit.toolbar", json!({}));
             }
             ui.add_space(if t.pro { 8.0 } else { 14.0 });
-            color_chips(app, ui);
+            color_chips(app, ui, double);
             if t.pro {
                 ui.add_space(8.0);
                 let quick_mask = app.session.active().is_some_and(|s| s.doc.quick_mask.is_some());
@@ -291,9 +291,9 @@ pub fn toolbar_needs_double(slots: usize, sections: usize, bx: f32, pro: bool, s
     let pitch = bx + 3.0;
     let needed = if pro {
         // margins + header + slots + "…" + gap + colour chips + gap + 2 buttons
-        16.0 + 21.0 + (slots + 1) as f32 * pitch + 8.0 + chips_height(true, false) + 8.0 + 2.0 * pitch
+        16.0 + 21.0 + (slots + 1) as f32 * pitch + 8.0 + chips_height(true, false, false) + 8.0 + 2.0 * pitch
     } else {
-        16.0 + slots as f32 * pitch + sections.saturating_sub(1) as f32 * 12.0 + 14.0 + chips_height(false, studio)
+        16.0 + slots as f32 * pitch + sections.saturating_sub(1) as f32 * 12.0 + 14.0 + chips_height(false, studio, false)
     };
     needed > avail_h
 }
@@ -312,18 +312,18 @@ const CHIP_ICON: f32 = 13.0;
 
 /// Studio themes: round chip diameter and the background chip's vertical offset (points).
 const STUDIO_CHIP: (f32, f32) = (30.0, 19.0);
-/// Room under the Studio chips for the Switch Colors curve.
+/// Room under the round chips for the Default Colors and Switch Colors buttons.
 const STUDIO_ROW: f32 = 15.0;
-
-/// Do the toolbar colour chips use the Studio layout (round, stacked, controls below)?
-fn studio_chips(kind: theme::ThemeKind) -> bool {
-    matches!(kind, theme::ThemeKind::Studio | theme::ThemeKind::StudioLight)
-}
+/// Room above the stacked round chips so Default Colors, at their top-right, clears them.
+const STUDIO_TOP: f32 = 6.0;
 
 /// Height of the colour chips block.
-fn chips_height(pro: bool, studio: bool) -> f32 {
+fn chips_height(pro: bool, studio: bool, wide: bool) -> f32 {
+    if studio && wide {
+        return STUDIO_CHIP.0 + STUDIO_ROW;
+    }
     if studio {
-        return STUDIO_CHIP.0 + STUDIO_CHIP.1 + STUDIO_ROW;
+        return STUDIO_TOP + STUDIO_CHIP.0 + STUDIO_CHIP.1 + STUDIO_ROW;
     }
     let (chip, step) = chip_metrics(pro);
     CHIP_ICON + 3.0 + chip + step
@@ -332,17 +332,22 @@ fn chips_height(pro: bool, studio: bool) -> f32 {
 /// Photoshop's foreground / background colour chips: the Default Colors (D) and Switch Colors (X)
 /// icons above them, the foreground chip over the background one, all centred in the toolbar
 /// column and kept inside it.
-fn color_chips(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+fn color_chips(app: &mut PhotocraftApp, ui: &mut egui::Ui, two_columns: bool) {
     let t = Tokens::get(ui.ctx());
     // Studio themes: round chips stacked vertically, the controls below them.
-    let studio = studio_chips(t.kind);
+    let studio = t.round_chips;
     let (chip, step) = if studio { STUDIO_CHIP } else { chip_metrics(t.pro) };
-    let group = if studio { chip } else { chip + step };
+    // With two tool columns (a short window) the round chips lie side by side, which saves height.
+    let wide = studio && two_columns;
+    let group = if studio && !wide { chip } else { chip + step };
     let w = ui.available_width().max(group);
-    let (rect, _) = ui.allocate_exact_size(vec2(w, chips_height(t.pro, studio)), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(w, chips_height(t.pro, studio, wide)), Sense::hover());
     let left = (rect.left() + (w - group) / 2.0).round();
-    let (fg, bg) = if studio {
+    let (fg, bg) = if wide {
         let fg = Rect::from_min_size(pos2(left, rect.top()), vec2(chip, chip));
+        (fg, fg.translate(vec2(step, 0.0)))
+    } else if studio {
+        let fg = Rect::from_min_size(pos2(left, rect.top() + STUDIO_TOP), vec2(chip, chip));
         (fg, fg.translate(vec2(0.0, step)))
     } else {
         let fg = Rect::from_min_size(pos2(left, rect.top() + CHIP_ICON + 3.0), vec2(chip, chip));
@@ -383,10 +388,20 @@ fn color_chips(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     }
     // Default Colors at the left, Switch Colors at the right, over the chips.
     let (dr, sr) = if studio {
-        // Switch Colors is a small curve tucked right under the chips, centred. There is no
-        // Default Colors button here (the D key and the Tools menu still reset them).
-        let (cx, row) = (fg.center().x, bg.bottom() + 3.5);
-        (None, Rect::from_center_size(pos2(cx, row), vec2(20.0, 14.0)))
+        // Switch Colors is a curve right under the chips, centred on them so its heads touch
+        // them. Default Colors never moves it: at the left edge beside it when the chips lie side
+        // by side, at the block's top-right corner when they are stacked.
+        let (cx, row) = ((fg.center().x + bg.center().x) / 2.0, fg.bottom().max(bg.bottom()) + 3.5);
+        let default = if wide {
+            Rect::from_center_size(pos2(rect.left() + CHIP_ICON / 2.0, row), vec2(CHIP_ICON, CHIP_ICON))
+        } else {
+            // Just high enough that its bottom-left corner clears the foreground chip's outline.
+            let x = rect.right() - CHIP_ICON;
+            let (dx, r) = ((x - fg.center().x).max(0.0), fg.width() / 2.0 + 1.0);
+            let clear = if dx < r { (r * r - dx * dx).sqrt() } else { 0.0 };
+            Rect::from_min_size(pos2(x, fg.center().y - clear - CHIP_ICON), vec2(CHIP_ICON, CHIP_ICON))
+        };
+        (Some(default), Rect::from_center_size(pos2(cx, row), vec2(20.0, 14.0)))
     } else {
         let icon = |x: f32| Rect::from_min_size(pos2(x, rect.top()), vec2(CHIP_ICON, CHIP_ICON));
         (Some(icon(left)), icon(left + group - CHIP_ICON))
@@ -427,16 +442,6 @@ fn color_chips(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             p.add(egui::Shape::convex_polygon(vec![tip, base + side * 3.0, base - side * 3.0], ink(&s), Stroke::NONE));
         }
     } else {
-        // Default Colors: a small black chip over a small white one.
-        if let (Some(dr), Some(d)) = (dr, d.as_ref()) {
-            let small = 7.0;
-            let (b, w) = (Rect::from_min_size(dr.min + vec2(1.0, 1.0), vec2(small, small)), Rect::from_min_size(dr.min + vec2(5.0, 5.0), vec2(small, small)));
-            p.rect_filled(w, 1.0, Color32::WHITE);
-            p.rect_stroke(w, 1.0, Stroke::new(1.0, ink(d)), StrokeKind::Inside);
-            p.rect_filled(b.expand(1.0), 1.5, t.chrome);
-            p.rect_filled(b, 1.0, Color32::BLACK);
-            p.rect_stroke(b, 1.0, Stroke::new(1.0, ink(d)), StrokeKind::Inside);
-        }
         // Switch Colors: a quarter-circle arrow with a head at each end.
         let stroke = Stroke::new(1.3, ink(&s));
         let (c, rad) = (pos2(sr.left() + 2.0, sr.bottom() - 1.0), sr.width() - 4.0);
@@ -453,6 +458,16 @@ fn color_chips(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         p.line_segment([start, start + vec2(head, head)], stroke);
         p.line_segment([end, end + vec2(-head, -head)], stroke);
         p.line_segment([end, end + vec2(head, -head)], stroke);
+    }
+    // Default Colors: a small black chip over a small white one.
+    if let (Some(dr), Some(d)) = (dr, d.as_ref()) {
+        let small = 7.0;
+        let (b, w) = (Rect::from_min_size(dr.min + vec2(1.0, 1.0), vec2(small, small)), Rect::from_min_size(dr.min + vec2(5.0, 5.0), vec2(small, small)));
+        p.rect_filled(w, 1.0, Color32::WHITE);
+        p.rect_stroke(w, 1.0, Stroke::new(1.0, ink(d)), StrokeKind::Inside);
+        p.rect_filled(b.expand(1.0), 1.5, t.chrome);
+        p.rect_filled(b, 1.0, Color32::BLACK);
+        p.rect_stroke(b, 1.0, Stroke::new(1.0, ink(d)), StrokeKind::Inside);
     }
     if let Some(d) = &d {
         d.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tl!("Default colours (D)")));
@@ -3186,23 +3201,32 @@ mod color_tests {
         assert_eq!(srgb_bytes(h.state().session.tools.foreground), [0xff, 0x80, 0x00]);
     }
 
-    /// Studio themes draw round chips with Default Colors and Switch Colors below them; both
-    /// buttons still work from there.
+    /// Themes with `round_chips` (Studio) draw round chips, stacked or side by side in two tool
+    /// columns, with Switch Colors right under them and Default Colors at the top-right corner
+    /// (stacked) or the left edge (side by side); both buttons work in either layout.
     #[test]
-    fn studio_color_chips_swap_from_below_and_have_no_default_button() {
+    fn studio_color_chips_keep_default_and_swap_buttons_below() {
         use egui_kittest::kittest::Queryable;
-        for kind in [crate::theme::ThemeKind::Studio, crate::theme::ThemeKind::StudioLight] {
+        for (kind, two_columns) in [
+            (crate::theme::ThemeKind::Studio, false),
+            (crate::theme::ThemeKind::StudioLight, false),
+            (crate::theme::ThemeKind::Studio, true),
+            (crate::theme::ThemeKind::StudioLight, true),
+        ] {
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
             app.session.tools.foreground = [1.0, 0.0, 0.0, 1.0];
             app.session.tools.background = [0.0, 0.0, 1.0, 1.0];
-            let mut h = egui_kittest::Harness::builder().with_size(vec2(80.0, 120.0)).build_ui_state(|ui, app: &mut PhotocraftApp| color_chips(app, ui), app);
+            let mut h = egui_kittest::Harness::builder().with_size(vec2(80.0, 120.0)).build_ui_state(|ui, app: &mut PhotocraftApp| color_chips(app, ui, two_columns), app);
             PhotocraftApp::setup_context(&h.ctx, kind);
             h.run_steps(2);
             h.get_by_label("Swap colours (X)").click();
             h.run_steps(2);
             assert_eq!(h.state().session.tools.foreground, [0.0, 0.0, 1.0, 1.0], "{kind:?}");
             assert_eq!(h.state().session.tools.background, [1.0, 0.0, 0.0, 1.0], "{kind:?}");
-            assert!(h.query_by_label("Default colours (D)").is_none(), "{kind:?}");
+            h.get_by_label("Default colours (D)").click();
+            h.run_steps(2);
+            assert_eq!(h.state().session.tools.foreground, [0.0, 0.0, 0.0, 1.0], "{kind:?}");
+            assert_eq!(h.state().session.tools.background, [1.0, 1.0, 1.0, 1.0], "{kind:?}");
         }
     }
 
@@ -3211,9 +3235,12 @@ mod color_tests {
     #[test]
     fn studio_color_chips_fit_the_reserved_height() {
         // Chips, then the row holding the Switch Colors curve.
-        assert!(STUDIO_CHIP.0 + STUDIO_CHIP.1 + 8.0 + 4.0 <= chips_height(false, true));
+        assert!(STUDIO_CHIP.0 + STUDIO_CHIP.1 + 8.0 + 4.0 <= chips_height(false, true, false));
+        // Side by side: the chips plus the same row, and shorter than stacked.
+        assert!(STUDIO_CHIP.0 + 8.0 + 4.0 <= chips_height(false, true, true));
+        assert!(chips_height(false, true, true) < chips_height(false, true, false));
         // The Studio block is taller than Photoshop's, and the two-column check knows it.
-        assert!(chips_height(false, true) > chips_height(false, false));
+        assert!(chips_height(false, true, false) > chips_height(false, false, false));
     }
 
     /// An incomplete entry never changes the colour and the field snaps back when focus leaves.

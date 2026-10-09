@@ -11,7 +11,7 @@
 
 Switch themes with the sun icon, Window → Theme, or `ui.set {"theme":"classic"}` over the control channel.
 
-The toolbar's foreground and background colour chips follow the theme family. Pro and Classic draw Photoshop's overlapping squares with Default Colors and Switch Colors above them; Studio and Studio Light draw large round chips stacked vertically, with a small curved Switch Colors arrow right under them. There is no Default Colors button there (the D key and the Tools menu still reset the colours).
+The toolbar's foreground and background colour chips follow the `Tokens::round_chips` flag. Pro and Classic leave it off and draw Photoshop's overlapping squares with Default Colors and Switch Colors above them. Studio and Studio Light turn it on and draw large round chips with a curved Switch Colors arrow centred right under them, its heads touching the chips: stacked vertically in one tool column, with Default Colors at their top-right, and side by side in two tool columns, with Default Colors at the toolbar's left edge. Another non-Pro theme can opt in by setting the flag.
 
 ## Rules
 
