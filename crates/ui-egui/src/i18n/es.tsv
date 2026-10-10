@@ -2488,6 +2488,18 @@ fontWeight	Italic	Cursiva
 	Expand Panels	Expandir paneles
 	Close Tab	Cerrar pestaña
 	Add Tab	Añadir pestaña
+
+# Add Noise, Reduce Noise and Smart Sharpen dialog controls (Filter > Noise, Filter > Sharpen).
+	Distribution	Distribución
+	Uniform	Uniforme
+	Gaussian	Gaussiana
+	Monochromatic	Monocromático
+	Seed	Semilla
+	Strength	Intensidad
+	Reduce Color Noise	Reducir ruido de color
+	Remove Jpeg Artifact	Quitar artefactos JPEG
+	Sharpen Details	Enfocar detalles
+	Reduce Noise	Reducir ruido
 	Use Classic Mode	Usar modo clásico
 	Auto Center Preview	Centrar previsualización automáticamente
 	Next Document	Documento siguiente
