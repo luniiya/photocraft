@@ -1142,7 +1142,8 @@ fn theme_card(ui: &mut egui::Ui, title: &str, active: bool, selected: &mut Strin
         .inner_margin(10.0)
         .show(ui, |ui| {
             ui.set_width(width - 20.0);
-            ui.set_min_height(256.0);
+            // Room for the longer list (five dark themes), so both cards line up.
+            ui.set_min_height(298.0);
             ui.horizontal(|ui| {
                 ui.label(RichText::new(tl!(title)).strong().color(t.text));
                 if active {
@@ -1178,11 +1179,11 @@ fn appearance_rows(ui: &mut egui::Ui, obj: &mut Map<String, Value>, system: Opti
     let mut dark = obj.get("darkTheme").and_then(Value::as_str).unwrap_or("proMedium").to_string();
     ui.horizontal_top(|ui| {
         ui.set_min_width(width * 2.0 + 10.0);
-        ui.allocate_ui_with_layout(vec2(width, 235.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.allocate_ui_with_layout(vec2(width, 300.0), egui::Layout::top_down(egui::Align::Min), |ui| {
             theme_card(ui, "Light Theme", light_active, &mut light, &[("studioLight", ThemeKind::StudioLight), ("classic", ThemeKind::Classic), ("adwaita", ThemeKind::Adwaita)], width);
         });
         ui.add_space(10.0);
-        ui.allocate_ui_with_layout(vec2(width, 235.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.allocate_ui_with_layout(vec2(width, 300.0), egui::Layout::top_down(egui::Align::Min), |ui| {
             theme_card(
                 ui,
                 "Dark Theme",
