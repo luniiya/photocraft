@@ -621,6 +621,55 @@ fn dragging_a_tab_moves_it_between_panes() {
 }
 
 #[test]
+fn a_dropped_tab_lands_at_the_slot_asked() {
+    let mut l = DockLayout::default();
+    // Into another pane, between Color and Swatches.
+    l.drop_tab("channels", Drop::Insert(0, 1));
+    assert_eq!(tabs(&l, "color"), ["color", "channels", "swatches", "gradients", "patterns"]);
+    assert!(l.is_front("channels"));
+    // Reordering within a pane: the slot is counted before the tab leaves.
+    l.drop_tab("patterns", Drop::Insert(0, 0));
+    assert_eq!(tabs(&l, "color"), ["patterns", "color", "channels", "swatches", "gradients"]);
+    l.drop_tab("patterns", Drop::Insert(0, 3));
+    assert_eq!(tabs(&l, "color"), ["color", "channels", "patterns", "swatches", "gradients"]);
+    // Next to itself nothing moves, but it comes forward; out of range changes nothing.
+    l.drop_tab("swatches", Drop::Insert(0, 4));
+    assert_eq!(tabs(&l, "color"), ["color", "channels", "patterns", "swatches", "gradients"]);
+    assert!(l.is_front("swatches"));
+    let before = l.clone();
+    l.drop_tab("swatches", Drop::Insert(99, 0));
+    l.drop_tab("bogus", Drop::Insert(0, 0));
+    assert_eq!(l, before);
+    l.drop_tab("layers", Drop::Insert(0, 999));
+    assert_eq!(tabs(&l, "color").last().map(String::as_str), Some("layers"));
+}
+
+/// Dropping a tab between two tabs of another strip puts it there, not at the end.
+#[test]
+fn dragging_a_tab_between_two_tabs_inserts_it_there() {
+    for theme in [ThemeKind::ProMedium, ThemeKind::Studio] {
+        let (app, _, _) = app_with_layers();
+        let mut h = harness(app, vec2(1200.0, 900.0), theme);
+        let (color, swatches) = (tab_rect(&h, "color"), tab_rect(&h, "swatches"));
+        let first = if color.left() < swatches.left() { "color" } else { "swatches" };
+        let between = Pos2::new((color.right().min(swatches.right()) + color.left().max(swatches.left())) / 2.0, color.center().y);
+        let from = tab_rect(&h, "channels").center();
+        drag(&mut h, from, between);
+        let got = tabs(&h.state().ui.dock, "color");
+        assert_eq!(got.get(1).map(String::as_str), Some("channels"), "{theme:?}: {got:?}");
+        assert_eq!(got.first().map(String::as_str), Some(first), "{theme:?}: {got:?}");
+        // Within the strip: the first tab dragged to just before the last one shown.
+        let shown = strip_of(&h, "color").tabs;
+        let (last, r) = shown.last().cloned().unwrap();
+        let from = tab_rect(&h, first).center();
+        drag(&mut h, from, Pos2::new(r.left() + 2.0, r.center().y));
+        let got = tabs(&h.state().ui.dock, "color");
+        let i = got.iter().position(|t| *t == last).unwrap();
+        assert_eq!(got.get(i - 1).map(String::as_str), Some(first), "{theme:?}: {got:?}");
+    }
+}
+
+#[test]
 fn tiny_windows_do_not_panic() {
     for theme in [ThemeKind::ProMedium, ThemeKind::Studio] {
         for (w, ht) in [(40.0, 30.0), (300.0, 80.0), (600.0, 200.0), (2000.0, 120.0)] {
@@ -658,6 +707,9 @@ fn the_rail_and_window_menu_never_lose_a_panel() {
     // …and shows a hidden one.
     rail_click(&mut app, "history");
     assert!(app.ui.dock.is_front("history") && !collapsed(&app, "history"));
+    // A background tab comes forward rather than collapsing its pane.
+    rail_click(&mut app, "channels");
+    assert!(app.ui.dock.is_front("channels") && !collapsed(&app, "channels"));
     // Window › Layers on a collapsed pane expands it instead of hiding it.
     let i = app.ui.dock.pane_of("layers").unwrap();
     app.ui.dock.set_collapsed(i, true);
@@ -1187,6 +1239,24 @@ fn the_pro_rail_plus_adds_a_panel() {
     h.query_all_by_label("History").find(|n| n.rect().width() > n.rect().height() + 4.0).expect("History in the picker").click();
     h.run_steps(3);
     assert!(h.state().ui.dock.is_front("history"));
+}
+
+/// Pro: Photoshop's icon column lists the docked panels, not a fixed set, so one added with
+/// the + shows there and one closed goes.
+#[test]
+fn the_pro_rail_lists_the_docked_panels() {
+    use egui_kittest::kittest::Queryable;
+
+    let (app, _, _) = app_with_layers();
+    let mut h = harness(app, vec2(1300.0, 850.0), ThemeKind::Pro);
+    let rail = |h: &Harness<'static, PhotocraftApp>| egui::containers::panel::PanelState::load(&h.ctx, egui::Id::new("rail")).expect("the Pro rail").outer_rect.left();
+    let on_rail = |h: &Harness<'static, PhotocraftApp>, label: &str| h.query_all_by_label(label).any(|n| n.rect().left() >= rail(h));
+    assert!(on_rail(&h, "Layers") && on_rail(&h, "Channels") && on_rail(&h, "Swatches"));
+    assert!(!on_rail(&h, "Histogram"));
+    h.state_mut().ui.dock.add_pane("histogram");
+    h.state_mut().ui.dock.close("channels");
+    h.run_steps(3);
+    assert!(on_rail(&h, "Histogram") && !on_rail(&h, "Channels"));
 }
 
 /// The pane terminology keeps layouts from the original panel PR loadable.

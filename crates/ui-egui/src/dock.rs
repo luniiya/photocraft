@@ -139,8 +139,11 @@ pub fn group_tabs(key: &str, pro: bool) -> &'static [&'static str] {
 /// Where a dragged tab lands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Drop {
-    /// Join pane `i` as its front tab.
+    /// Join pane `i` as its front tab, after its other tabs.
     Join(usize),
+    /// Join pane `i` as its front tab at slot `k` of its tabs (`k` counted before the dragged
+    /// tab leaves; `tabs.len()` = last). The same pane reorders its tabs.
+    Insert(usize, usize),
     /// A pane of its own, inserted at index `i` (`panes.len()` = last).
     NewAt(usize),
 }
@@ -340,8 +343,17 @@ impl DockLayout {
     pub fn drop_tab(&mut self, id: &str, to: Drop) {
         let Some(from) = self.pane_of(id) else { return };
         let alone = self.panes.get(from).is_some_and(|s| s.tabs.len() == 1);
+        let at = self.panes.get(from).and_then(|s| s.tabs.iter().position(|t| t == id)).unwrap_or(0);
         match to {
             Drop::Join(t) if t == from || t >= self.panes.len() => return,
+            Drop::Insert(t, _) if t >= self.panes.len() => return,
+            Drop::Insert(t, k) if t == from && (k == at || k == at + 1) => {
+                // Next to itself: nothing moves, but the tab comes forward.
+                if let Some(s) = self.panes.get_mut(t) {
+                    s.active = id.to_owned();
+                }
+                return;
+            }
             Drop::NewAt(k) if alone && (k == from || k == from + 1) => return,
             _ => {}
         }
@@ -349,6 +361,14 @@ impl DockLayout {
             s.tabs.retain(|t| t != id);
         }
         match to {
+            Drop::Insert(t, k) => {
+                let k = if t == from && k > at { k - 1 } else { k };
+                if let Some(s) = self.panes.get_mut(t) {
+                    s.tabs.insert(k.min(s.tabs.len()), id.to_owned());
+                    s.active = id.to_owned();
+                    s.collapsed = false;
+                }
+            }
             Drop::Join(t) => {
                 if let Some(s) = self.panes.get_mut(t) {
                     s.tabs.push(id.to_owned());
@@ -506,16 +526,14 @@ pub fn reveal(app: &mut PhotocraftApp, id: &str) {
     app.ui.panels.dock = true;
 }
 
-/// Pro icon rail click: a hidden module is shown, a collapsed pane expanded and an expanded
-/// one collapsed to its tab strip. A docked panel is never hidden from the rail (it used to
-/// toggle visibility, so one stray click made a panel vanish: #129).
+/// Pro icon rail click: a hidden module is shown, a background tab brought forward, a collapsed
+/// pane expanded and the expanded front module's pane collapsed to its tab strip. A docked panel
+/// is never hidden from the rail (it used to toggle visibility, so one stray click made a panel
+/// vanish: #129).
 pub fn rail_click(app: &mut PhotocraftApp, id: &str) {
     match app.ui.dock.pane_of(id) {
-        None => reveal(app, id),
-        Some(i) => {
-            let collapse = app.ui.dock.panes.get(i).is_some_and(|s| !s.collapsed);
-            app.ui.dock.set_collapsed(i, collapse);
-        }
+        Some(i) if app.ui.dock.is_front(id) => app.ui.dock.set_collapsed(i, true),
+        _ => reveal(app, id),
     }
 }
 
@@ -740,8 +758,23 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     // A tab dragged: outline the pane it would join, or a line where its new pane would go.
     if let (Some(id), Some(p)) = (tab_drag.as_ref().or(tab_dropped.as_ref()), pointer) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-        let target = tab_drop_target(&rects, strip, p);
+        let target = match tab_drop_target(&rects, strip, p) {
+            Drop::Join(k) => tab_slot(&strips, &panes, k, p).map_or(Drop::Join(k), |at| Drop::Insert(k, at)),
+            other => other,
+        };
         match target {
+            Drop::Insert(k, at) => {
+                // An insertion line between the tabs where it would land.
+                let shown = strips.iter().find(|s| s.pane == k).map(|s| s.tabs.as_slice()).unwrap_or_default();
+                let tabs = panes.get(k).map(|s| s.tabs.as_slice()).unwrap_or_default();
+                let before = tabs.get(at).and_then(|id| shown.iter().find(|(t, _)| t == id));
+                let after = at.checked_sub(1).and_then(|i| tabs.get(i)).and_then(|id| shown.iter().find(|(t, _)| t == id));
+                match (before, after) {
+                    (Some((_, r)), _) => widgets::drop_line(ui, *r, false, true, &t),
+                    (None, Some((_, r))) => widgets::drop_line(ui, *r, true, true, &t),
+                    _ => {}
+                }
+            }
             Drop::Join(k) => {
                 if let Some(r) = rects.get(k)
                     && app.ui.dock.pane_of(id) != Some(k)
@@ -813,6 +846,23 @@ fn pane_drop_before(rects: &[Rect], dragged: usize, y: f32) -> Option<usize> {
     match rects.iter().position(|r| y < r.center().y) {
         Some(k) if k == dragged || k == dragged + 1 => Some(dragged),
         other => other,
+    }
+}
+
+/// The slot of pane `k`'s tabs a tab dragged to `x` on its strip lands at: before the first shown
+/// tab whose middle is right of `p`, else after the last shown one. `None` off the strip's tab
+/// row (the pane has none shown, or the pointer is over its body).
+fn tab_slot(strips: &[StripRects], panes: &[Pane], k: usize, p: egui::Pos2) -> Option<usize> {
+    let shown = &strips.iter().find(|s| s.pane == k)?.tabs;
+    let row = shown.iter().map(|(_, r)| *r).reduce(|a, b| a.union(b))?;
+    if !(row.top() - 4.0..=row.bottom() + 4.0).contains(&p.y) {
+        return None;
+    }
+    let tabs = &panes.get(k)?.tabs;
+    let index = |id: &str| tabs.iter().position(|t| t == id);
+    match shown.iter().find(|(_, r)| r.center().x >= p.x) {
+        Some((id, _)) => index(id),
+        None => shown.last().and_then(|(id, _)| index(id)).map(|i| i + 1),
     }
 }
 

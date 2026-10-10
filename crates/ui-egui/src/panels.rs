@@ -1454,17 +1454,18 @@ fn pro_rail(app: &mut PhotocraftApp, ui: &mut egui::Ui, t: &Tokens) {
             let r = ui.max_rect();
             ui.painter().line_segment([r.left_top() - vec2(6.0, 8.0), r.left_bottom() + vec2(-6.0, 8.0)], Stroke::new(1.0, t.separator));
             ui.spacing_mut().item_spacing.y = 4.0;
-            for (icon, name, id) in [
-                ("sliders-horizontal", tl!("Properties"), "properties"),
-                ("navigation", tl!("Navigator"), "navigator"),
-                ("palette", tl!("Color & Swatches"), "color"),
-                ("layers", tl!("Layers"), "layers"),
-                ("clock", tl!("History"), "history"),
-            ] {
-                let dock = &app.ui.dock;
-                let on = dock.pane_of(id).and_then(|i| dock.panes.get(i)).is_some_and(|s| !s.collapsed);
-                if icons::rail_button(ui, icon, 28.0, on, name).clicked() {
-                    crate::dock::rail_click(app, id);
+            // Like Photoshop's iconic panels: one icon per docked panel, a line between groups.
+            let panes = app.ui.dock.panes.clone();
+            for (i, pane) in panes.iter().enumerate() {
+                if i > 0 {
+                    let y = ui.cursor().top() + 1.0;
+                    ui.painter().line_segment([pos2(r.left() + 4.0, y), pos2(r.right() - 4.0, y)], Stroke::new(1.0, t.separator));
+                    ui.add_space(3.0);
+                }
+                for m in pane.tabs.iter().filter_map(|id| crate::modules::get(id)) {
+                    if icons::rail_button(ui, m.icon, 28.0, app.ui.dock.is_front(m.id), tl!(m.title)).clicked() {
+                        crate::dock::rail_click(app, m.id);
+                    }
                 }
             }
             // Add a panel group, at the bottom of the column like the rail's other icons.
