@@ -1249,7 +1249,8 @@ fn the_pro_rail_lists_the_docked_panels() {
 
     let (app, _, _) = app_with_layers();
     let mut h = harness(app, vec2(1300.0, 850.0), ThemeKind::Pro);
-    let rail = |h: &Harness<'static, PhotocraftApp>| egui::containers::panel::PanelState::load(&h.ctx, egui::Id::new("rail")).expect("the Pro rail").outer_rect.left();
+    let rail =
+        |h: &Harness<'static, PhotocraftApp>| egui::containers::panel::PanelState::load(&h.ctx, egui::Id::new("rail")).expect("the Pro rail").outer_rect.left();
     let on_rail = |h: &Harness<'static, PhotocraftApp>, label: &str| h.query_all_by_label(label).any(|n| n.rect().left() >= rail(h));
     assert!(on_rail(&h, "Layers") && on_rail(&h, "Channels") && on_rail(&h, "Swatches"));
     assert!(!on_rail(&h, "Histogram"));
