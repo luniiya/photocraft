@@ -358,14 +358,17 @@ fn dragging_the_splitter_resizes_and_survives_a_ui_state_round_trip() {
     assert!((layers2.top() - (layers.top() - 60.0)).abs() < 2.0, "{layers:?} -> {layers2:?}");
     assert_eq!(rect_of(&h, "color"), color, "the pane above keeps its place");
     assert_eq!(layers2.bottom(), layers.bottom());
-    let stored = sec(&h.state().ui.dock, "properties").height.unwrap();
-    // Dragging past the minimum stops at it.
+    // Dragging past the minimum pushes the group above down to its minimum too (#2573), then stops.
     let split = Pos2::new(props2.center().x, props2.bottom() + GAP / 2.0);
     drag(&mut h, split, split - vec2(0.0, 600.0));
-    assert_eq!(rect_of(&h, "properties").height(), sec(&h.state().ui.dock, "properties").min_height());
+    assert_eq!(rect_of(&h, "properties").height(), Pane::new(&["properties"]).min_height());
+    assert_eq!(rect_of(&h, "color").height(), Pane::new(&["color"]).min_height());
+    assert_eq!(rect_of(&h, "layers").bottom(), layers.bottom());
+    // Dragging back down grows Properties alone; Color stays where it was pushed.
     let from = Pos2::new(split.x, rect_of(&h, "properties").bottom() + GAP / 2.0);
     drag(&mut h, from, split);
-    assert!((sec(&h.state().ui.dock, "properties").height.unwrap() - stored).abs() < 2.0);
+    assert!((rect_of(&h, "properties").bottom() - props2.bottom()).abs() < 2.0);
+    assert_eq!(rect_of(&h, "color").height(), Pane::new(&["color"]).min_height());
 
     // Save and restore the UI state (what `ui.inspect` / `ui.set` and workspaces carry).
     let saved = serde_json::to_value(&h.state().ui).unwrap();
@@ -388,6 +391,117 @@ fn dragging_the_splitter_resizes_and_survives_a_ui_state_round_trip() {
     let mut app4 = PhotocraftApp::new(s3, crate::Services::default());
     restore(&mut app4);
     assert_eq!(app4.ui.dock, DockLayout::default());
+}
+
+/// `resize` on `shown` laid out in a column `avail` tall, then the new layout.
+fn resized(l: &mut DockLayout, shown: &[&str], avail: f32, i: usize, dy: f32) -> Vec<f32> {
+    assert_eq!(fronts(l), shown);
+    let hs = l.heights_for(avail, 28.0);
+    l.resize(&hs, i, dy);
+    l.heights_for(avail, 28.0)
+}
+
+fn total(hs: &[f32]) -> f32 {
+    hs.iter().sum::<f32>() + GAP * hs.len().saturating_sub(1) as f32
+}
+
+#[test]
+fn dragging_a_splitter_down_pushes_every_group_below_in_turn() {
+    let shown = ["color", "properties", "navigator", "layers"];
+    let mut l = DockLayout { panes: shown.iter().map(|id| Pane::new(&[*id])).collect(), ..Default::default() };
+    let before = l.heights_for(1200.0, 28.0);
+    // Properties gives way first, then Navigator, then the filler; the column stays 1200.
+    let hs = resized(&mut l, &shown, 1200.0, 0, 300.0);
+    assert_eq!(hs[0], before[0] + 300.0, "{hs:?}");
+    assert_eq!(hs[1], Pane::new(&["properties"]).min_height());
+    assert_eq!(hs[2], before[2] - (300.0 - (before[1] - Pane::new(&["properties"]).min_height())));
+    assert_eq!(hs[3], before[3], "the filler is untouched until the groups above it are at minimum");
+    assert!((total(&hs) - 1200.0).abs() < 1e-3);
+    // Far past the end: everything below is at its minimum and the drag stops there.
+    let hs = resized(&mut l, &shown, 1200.0, 0, 5000.0);
+    assert_eq!(hs[1], Pane::new(&["properties"]).min_height());
+    assert_eq!(hs[2], Pane::new(&["navigator"]).min_height());
+    assert_eq!(hs[3], Pane::new(&["layers"]).min_height());
+    assert!((total(&hs) - 1200.0).abs() < 1e-3, "{hs:?}");
+    let full = hs[0];
+    assert_eq!(resized(&mut l, &shown, 1200.0, 0, 50.0)[0], full);
+}
+
+#[test]
+fn dragging_a_splitter_up_pushes_every_group_above_in_turn() {
+    let shown = ["color", "properties", "navigator", "layers"];
+    let mut l = DockLayout { panes: shown.iter().map(|id| Pane::new(&[*id])).collect(), ..Default::default() };
+    let before = l.heights_for(1200.0, 28.0);
+    // The splitter under Navigator: Navigator shrinks first, then Properties, then Color.
+    let hs = resized(&mut l, &shown, 1200.0, 2, -200.0);
+    assert_eq!(hs[2], Pane::new(&["navigator"]).min_height());
+    assert_eq!(hs[1], before[1] - (200.0 - (before[2] - Pane::new(&["navigator"]).min_height())));
+    assert_eq!(hs[0], before[0]);
+    assert_eq!(hs[3], before[3] + 200.0, "the filler takes the room");
+    let hs = resized(&mut l, &shown, 1200.0, 2, -5000.0);
+    assert!(hs[..3].iter().zip(&l.panes).all(|(h, pane)| *h == pane.min_height()), "{hs:?}");
+    assert!((total(&hs) - 1200.0).abs() < 1e-3);
+    // The group grown when the filler isn't next: the splitter under Color grows Properties.
+    let mut l = DockLayout { panes: shown.iter().map(|id| Pane::new(&[*id])).collect(), ..Default::default() };
+    let hs = resized(&mut l, &shown, 1200.0, 0, -500.0);
+    assert_eq!(hs[0], Pane::new(&["color"]).min_height());
+    assert_eq!(hs[1], before[1] + (before[0] - Pane::new(&["color"]).min_height()));
+    assert_eq!(hs[2], before[2]);
+}
+
+#[test]
+fn pushing_skips_collapsed_groups_and_respects_the_filler() {
+    let shown = ["color", "properties", "navigator", "history", "layers"];
+    let mut l = DockLayout { panes: shown.iter().map(|id| Pane::new(&[*id])).collect(), ..Default::default() };
+    l.set_collapsed(1, true);
+    l.set_collapsed(4, true);
+    let before = l.heights_for(1200.0, 28.0);
+    // History is the filler now; Properties keeps its strip and Layers stays collapsed.
+    let hs = resized(&mut l, &shown, 1200.0, 0, 5000.0);
+    assert_eq!(hs[1], 28.0);
+    assert_eq!(hs[4], 28.0);
+    assert_eq!(hs[2], Pane::new(&["navigator"]).min_height());
+    assert_eq!(hs[3], Pane::new(&["history"]).min_height());
+    assert_eq!(hs[0], before[0] + (before[2] - Pane::new(&["navigator"]).min_height()) + (before[3] - Pane::new(&["history"]).min_height()));
+    assert!((total(&hs) - 1200.0).abs() < 1e-3);
+    assert!(sec(&l, "history").height.is_none(), "the filler's height is never stored");
+    // Dragging up from Navigator over the collapsed Properties shrinks Color.
+    let hs = resized(&mut l, &shown, 1200.0, 2, -5000.0);
+    assert_eq!(hs[0], Pane::new(&["color"]).min_height());
+    assert_eq!(hs[1], 28.0);
+    assert_eq!(hs[2], Pane::new(&["navigator"]).min_height());
+    assert!((total(&hs) - 1200.0).abs() < 1e-3);
+    // Nothing to resize against, bad deltas and out-of-range splitters are ignored.
+    let snapshot = l.clone();
+    for (i, dy) in [(3, 50.0), (4, 50.0), (9, 50.0), (0, f32::NAN), (0, f32::INFINITY), (0, 0.0)] {
+        let hs = l.heights_for(1200.0, 28.0);
+        l.resize(&hs, i, dy);
+        assert_eq!(l, snapshot, "splitter {i} by {dy}");
+    }
+}
+
+#[test]
+fn dragging_swatches_down_pushes_properties_then_layers() {
+    let (app, _, _) = app_with_layers();
+    let mut h = harness(app, vec2(1200.0, 800.0), ThemeKind::ProMedium);
+    let color = rect_of(&h, "color");
+    let props = rect_of(&h, "properties");
+    let layers = rect_of(&h, "layers");
+    let room = (props.height() - Pane::new(&["properties"]).min_height()) + (layers.height() - Pane::new(&["layers"]).min_height());
+    let split = Pos2::new(color.center().x, color.bottom() + GAP / 2.0);
+    // Past Properties' minimum: Layers gives way too instead of the drag hard-stopping.
+    let dy = props.height() - Pane::new(&["properties"]).min_height() + 40.0;
+    drag(&mut h, split, split + vec2(0.0, dy));
+    assert!((rect_of(&h, "color").height() - (color.height() + dy)).abs() < 2.0, "{color:?} -> {:?}", rect_of(&h, "color"));
+    assert_eq!(rect_of(&h, "properties").height(), Pane::new(&["properties"]).min_height());
+    assert!((rect_of(&h, "layers").height() - (layers.height() - 40.0)).abs() < 2.0);
+    assert_eq!(rect_of(&h, "layers").bottom(), layers.bottom());
+    // All the way: everything below at its minimum.
+    let split = Pos2::new(color.center().x, rect_of(&h, "color").bottom() + GAP / 2.0);
+    drag(&mut h, split, split + vec2(0.0, 2000.0));
+    assert!((rect_of(&h, "color").height() - (color.height() + room)).abs() < 2.0);
+    assert_eq!(rect_of(&h, "layers").height(), Pane::new(&["layers"]).min_height());
+    assert_eq!(rect_of(&h, "layers").bottom(), layers.bottom());
 }
 
 #[test]
@@ -1084,7 +1198,7 @@ fn short_layer_panes_keep_the_footer_inside() {
         app.ui.dock.panes[0].height = Some(140.0);
         let h = harness(app, vec2(1000.0, 700.0), theme);
         let pane = rect_of(&h, "layers");
-        let footer = h.get_by_label("Delete layer").rect();
+        let footer = h.get_by_label("Create a new layer").rect();
         assert!(footer.top() >= pane.top() && footer.bottom() <= pane.bottom() + 0.5, "{theme:?}: footer {footer:?} outside pane {pane:?}");
         assert!(footer.height() >= 25.0, "{theme:?}: footer clipped: {footer:?}");
     }

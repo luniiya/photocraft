@@ -436,32 +436,45 @@ impl DockLayout {
         hs
     }
 
-    /// Splitter `i` (below pane `i`) dragged by `dy`: pane `i` grows or shrinks against the
-    /// next expanded pane (or the filler, which absorbs the difference).
+    /// Splitters push expanded panes on the side they move into, nearest first, down to
+    /// each pane's minimum. The opposite pane grows; the filler absorbs its share implicitly.
     fn resize(&mut self, heights: &[f32], i: usize, dy: f32) {
         if !dy.is_finite() || dy == 0.0 {
             return;
         }
-        let Some(&h) = heights.get(i) else { return };
-        let filler = self.panes.iter().rposition(|s| !s.collapsed);
-        let Some(j) = self.panes.iter().enumerate().skip(i + 1).find(|(_, s)| !s.collapsed).map(|(j, _)| j) else { return };
-        let Some(&nh) = heights.get(j) else { return };
-        let (Some(min_i), Some(min_j)) = (self.panes.get(i).map(Pane::min_height), self.panes.get(j).map(Pane::min_height)) else { return };
-        // The first drag pins the other panes at the heights they show, so panes still at
-        // their defaults (which give way to the filler) don't shift while this one is resized.
-        for (k, (s, sh)) in self.panes.iter_mut().zip(heights).enumerate() {
-            if Some(k) != filler && !s.collapsed && s.height.is_none() {
-                s.height = Some(*sh);
+        let expanded: Vec<usize> = self.panes.iter().zip(heights).enumerate().filter_map(|(k, (pane, _))| (!pane.collapsed).then_some(k)).collect();
+        if !expanded.contains(&i) {
+            return;
+        }
+        let filler = expanded.last().copied();
+        let Some(j) = expanded.iter().copied().find(|k| *k > i) else { return };
+        let (grow, shrink): (usize, Vec<usize>) = if dy > 0.0 {
+            (i, expanded.iter().copied().filter(|k| *k >= j).collect())
+        } else {
+            (j, expanded.iter().rev().copied().filter(|k| *k <= i).collect())
+        };
+        // Pin other expanded panes at their displayed heights on the first drag.
+        for (k, (pane, height)) in self.panes.iter_mut().zip(heights).enumerate() {
+            if Some(k) != filler && !pane.collapsed && pane.height.is_none() {
+                pane.height = Some(*height);
             }
         }
-        let new_h = (h + dy).clamp(min_i, (h + nh - min_j).max(min_i));
-        if let Some(s) = self.panes.get_mut(i) {
-            s.height = Some(new_h);
+        let mut left = dy.abs();
+        for k in shrink {
+            if left <= 0.0 {
+                break;
+            }
+            let (Some(pane), Some(&height)) = (self.panes.get_mut(k), heights.get(k)) else { continue };
+            let give = (height - pane.min_height()).max(0.0).min(left);
+            left -= give;
+            if Some(k) != filler {
+                pane.height = Some(height - give);
+            }
         }
-        if Some(j) != filler
-            && let Some(s) = self.panes.get_mut(j)
+        if Some(grow) != filler
+            && let (Some(pane), Some(&height)) = (self.panes.get_mut(grow), heights.get(grow))
         {
-            s.height = Some((nh - (new_h - h)).max(min_j));
+            pane.height = Some(height + (dy.abs() - left));
         }
     }
 }
@@ -550,6 +563,9 @@ pub fn strip_height(pro: bool) -> f32 {
 /// Draw one module's body in `ui`, bounded to the height it has (scrolling unless it fills).
 fn module_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, m: &Module, salt: &str) {
     let inner = ui.available_height().max(0.0);
+    if Tokens::get(ui.ctx()).pro && m.id == "color" {
+        ui.data_mut(|d| d.insert_temp(crate::panels::color_field_fill_id(), inner));
+    }
     if m.fills {
         ui.set_min_height(inner);
         (m.body)(app, ui);
@@ -649,6 +665,7 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         }
         let front_module = mods.get(sel).copied();
         egui::Popup::menu(&resp.menu).show(|ui| {
+            crate::widgets::style_spectrum_popup_menu(ui);
             ui.set_min_width(170.0);
             if let Some(extra) = front_module.and_then(|m| m.menu) {
                 extra(app, ui);
