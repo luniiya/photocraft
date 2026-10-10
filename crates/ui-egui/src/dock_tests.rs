@@ -49,7 +49,9 @@ fn last_expanded_pane_fills_the_column() {
 #[test]
 fn short_columns_squeeze_panes_down_to_their_minimum_and_never_go_negative() {
     let l = DockLayout::default();
-    let hs = l.heights_for(400.0, 28.0);
+    // Leave enough room for the fixed controls and a partial squeeze of Properties.
+    let avail = l.panes[0].compact_height() + l.panes[1].min_height() + l.panes[2].min_height() + 2.0 * GAP + 10.0;
+    let hs = l.heights_for(avail, 28.0);
     assert_eq!(hs[2], l.panes[2].min_height(), "Layers keeps its minimum: {hs:?}");
     assert_eq!(hs[0], l.panes[0].compact_height(), "the pane farthest from Layers gives way last");
     assert!(hs[1] < l.panes[1].compact_height());
@@ -1070,4 +1072,20 @@ fn section_layouts_still_load_as_panes() {
     apply(&mut app, &json!({"dock": old}));
     assert_eq!(app.ui.dock, layout);
     assert_eq!(layout_from_control(&app, None, None, Some(&old)).unwrap(), Some(layout));
+}
+
+/// Shrinking a pane must keep its footer and bottom boundary inside its allocation.
+#[test]
+fn short_layer_panes_keep_the_footer_inside() {
+    use egui_kittest::kittest::Queryable;
+    for theme in ThemeKind::ALL {
+        let (mut app, _, _) = app_with_layers();
+        app.ui.dock = DockLayout { panes: vec![Pane::new(&["layers"]), Pane::new(&["history"])], ..Default::default() };
+        app.ui.dock.panes[0].height = Some(140.0);
+        let h = harness(app, vec2(1000.0, 700.0), theme);
+        let pane = rect_of(&h, "layers");
+        let footer = h.get_by_label("Delete layer").rect();
+        assert!(footer.top() >= pane.top() && footer.bottom() <= pane.bottom() + 0.5, "{theme:?}: footer {footer:?} outside pane {pane:?}");
+        assert!(footer.height() >= 25.0, "{theme:?}: footer clipped: {footer:?}");
+    }
 }

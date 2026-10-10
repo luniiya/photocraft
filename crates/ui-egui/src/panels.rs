@@ -1813,71 +1813,67 @@ pub(crate) fn layers(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let rows = crate::layer_tree_ui::display_rows(&doc, !app.ui.layer_filter.is_empty());
     let ctx = ui.ctx().clone();
     let footer = widgets::footer_height(ui) + ui.spacing().item_spacing.y;
-    let fill = ui.available_height() > footer + 60.0;
-    let rows_h = if fill { ui.available_height() - footer } else { f32::INFINITY };
-    egui::ScrollArea::vertical()
-        .id_salt("layer-rows")
-        .max_height(rows_h)
-        .min_scrolled_height(if fill { rows_h } else { 0.0 })
-        .auto_shrink([false, !fill])
-        .show(ui, |ui| {
-            // The drag keys are set only by actual layer-row and fx drags, not clicks or
-            // ordinary scrolling. The ScrollArea applies this to its own content.
-            // An fx drag that never saw its release (the panel was hidden) must not outlive the button.
-            if !ctx.input(|i| i.pointer.primary_down() || i.pointer.any_released()) {
-                ctx.data_mut(|d| d.remove::<FxDrag>(fx_drag_key()));
+    // Even a short pane must reserve its footer; an unbounded list grows the card
+    // beyond the pane clip and cuts off both the footer and the bottom border.
+    let rows_h = (ui.available_height() - footer).max(0.0);
+    egui::ScrollArea::vertical().id_salt("layer-rows").max_height(rows_h).min_scrolled_height(rows_h).auto_shrink([false, false]).show(ui, |ui| {
+        // The drag keys are set only by actual layer-row and fx drags, not clicks or
+        // ordinary scrolling. The ScrollArea applies this to its own content.
+        // An fx drag that never saw its release (the panel was hidden) must not outlive the button.
+        if !ctx.input(|i| i.pointer.primary_down() || i.pointer.any_released()) {
+            ctx.data_mut(|d| d.remove::<FxDrag>(fx_drag_key()));
+        }
+        let held = ctx.data(|d| d.get_temp::<u64>(egui::Id::new("layer-drag")).is_some() || d.get_temp::<FxDrag>(fx_drag_key()).is_some());
+        let dragging = held && ctx.input(|i| i.pointer.primary_down());
+        let pointer = ctx.input(|i| i.pointer.interact_pos());
+        let delta = layer_drag_edge_scroll(pointer, ui.clip_rect(), dragging, ctx.input(|i| i.stable_dt));
+        if delta != 0.0 {
+            ui.scroll_with_delta(vec2(0.0, delta));
+            ctx.request_repaint();
+        }
+        let filter = app.ui.layer_filter.clone();
+        let fx_collapsed = app.session.active().map(|d| d.fx_collapsed.clone()).unwrap_or_default();
+        crate::layer_row_ui::begin(ui.ctx());
+        for &(depth, l) in &rows {
+            // Select › Isolate Layers.
+            if !photocraft_engine::select_extra_cmds::isolation_shows(&doc, &isolated, l.id) {
+                continue;
             }
-            let held = ctx.data(|d| d.get_temp::<u64>(egui::Id::new("layer-drag")).is_some() || d.get_temp::<FxDrag>(fx_drag_key()).is_some());
-            let dragging = held && ctx.input(|i| i.pointer.primary_down());
-            let pointer = ctx.input(|i| i.pointer.interact_pos());
-            let delta = layer_drag_edge_scroll(pointer, ui.clip_rect(), dragging, ctx.input(|i| i.stable_dt));
-            if delta != 0.0 {
-                ui.scroll_with_delta(vec2(0.0, delta));
-                ctx.request_repaint();
-            }
-            let filter = app.ui.layer_filter.clone();
-            let fx_collapsed = app.session.active().map(|d| d.fx_collapsed.clone()).unwrap_or_default();
-            crate::layer_row_ui::begin(ui.ctx());
-            for &(depth, l) in &rows {
-                // Select › Isolate Layers.
-                if !photocraft_engine::select_extra_cmds::isolation_shows(&doc, &isolated, l.id) {
+            if !filter.is_empty() {
+                let kind = match &l.content {
+                    LayerContent::Raster(_) => "pixel",
+                    LayerContent::Adjustment(_) | LayerContent::Fill(_) => "adjustment",
+                    LayerContent::Text(_) => "type",
+                    LayerContent::Shape(_) => "shape",
+                    LayerContent::Smart(_) => "smart",
+                    LayerContent::Group(_) => "",
+                };
+                if !filter.iter().any(|k| k == kind) {
                     continue;
                 }
-                if !filter.is_empty() {
-                    let kind = match &l.content {
-                        LayerContent::Raster(_) => "pixel",
-                        LayerContent::Adjustment(_) | LayerContent::Fill(_) => "adjustment",
-                        LayerContent::Text(_) => "type",
-                        LayerContent::Shape(_) => "shape",
-                        LayerContent::Smart(_) => "smart",
-                        LayerContent::Group(_) => "",
-                    };
-                    if !filter.iter().any(|k| k == kind) {
-                        continue;
-                    }
-                }
-                let row = RowSel { selected: selection.contains(&l.id), primary: active == Some(l.id), multi: selection.len() > 1 };
-                let top = ui.cursor().top();
-                layer_row(app, &ctx, ui, &doc, l, depth, row, &mut actions);
-                if reveal == Some(l.id) {
-                    crate::layer_reveal::scroll_to_row(ui, top);
-                }
-                if !l.effects.items.is_empty() && fx_collapsed.iter().all(|id| *id != l.id) {
-                    effect_rows(app, ui, l, depth, &mut actions);
-                }
-                crate::smart_ui::filter_rows(app, ui, l, depth, &mut actions);
             }
-            // ⌥-click the line between two layers: clip / release the upper one (#967).
-            crate::clip_line_ui::show(ui, &doc, &mut actions);
-            // A rename whose row is gone (deleted, filtered out, inside a closed group) ends,
-            // committed: nothing else could commit or cancel it.
-            if let Some(layer) = crate::layer_row_ui::renaming(ui.ctx())
-                && !crate::layer_row_ui::recorded(ui.ctx()).iter().any(|r| r.layer == layer)
-                && let Some(done) = crate::layer_row_ui::end_rename(ui.ctx(), true)
-            {
-                actions.push(done);
+            let row = RowSel { selected: selection.contains(&l.id), primary: active == Some(l.id), multi: selection.len() > 1 };
+            let top = ui.cursor().top();
+            layer_row(app, &ctx, ui, &doc, l, depth, row, &mut actions);
+            if reveal == Some(l.id) {
+                crate::layer_reveal::scroll_to_row(ui, top);
             }
-        });
+            if !l.effects.items.is_empty() && fx_collapsed.iter().all(|id| *id != l.id) {
+                effect_rows(app, ui, l, depth, &mut actions);
+            }
+            crate::smart_ui::filter_rows(app, ui, l, depth, &mut actions);
+        }
+        // ⌥-click the line between two layers: clip / release the upper one (#967).
+        crate::clip_line_ui::show(ui, &doc, &mut actions);
+        // A rename whose row is gone (deleted, filtered out, inside a closed group) ends,
+        // committed: nothing else could commit or cancel it.
+        if let Some(layer) = crate::layer_row_ui::renaming(ui.ctx())
+            && !crate::layer_row_ui::recorded(ui.ctx()).iter().any(|r| r.layer == layer)
+            && let Some(done) = crate::layer_row_ui::end_rename(ui.ctx(), true)
+        {
+            actions.push(done);
+        }
+    });
     // A layer being dragged can also be dropped on the footer's Delete, New Layer and Group
     // buttons (#736); read the drag before it ends.
     let footer_drag = ctx.data(|d| d.get_temp::<u64>(egui::Id::new("layer-drag"))).map(|id| {
@@ -2431,8 +2427,8 @@ pub(crate) fn history(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let all = entries.iter().map(|e| (e.clone(), false)).chain(redo.iter().map(|e| (e.clone(), true)));
     // The dock gives History a fixed height: the rows scroll above the footer.
     let footer = if t.pro { widgets::footer_height(ui) + ui.spacing().item_spacing.y } else { 0.0 };
-    let max_h = (ui.available_height() - footer).max(40.0);
-    egui::ScrollArea::vertical().id_salt("history-rows").max_height(max_h).auto_shrink([false, false]).show(ui, |ui| {
+    let max_h = (ui.available_height() - footer).max(0.0);
+    egui::ScrollArea::vertical().id_salt("history-rows").max_height(max_h).min_scrolled_height(0.0).auto_shrink([false, false]).show(ui, |ui| {
         for (i, (e, is_redo)) in all.enumerate() {
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
             if i == current {

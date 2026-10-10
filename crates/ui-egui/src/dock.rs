@@ -554,7 +554,12 @@ fn module_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, m: &Module, salt: &st
         ui.set_min_height(inner);
         (m.body)(app, ui);
     } else {
-        egui::ScrollArea::vertical().id_salt(("dock-scroll", salt, m.id)).max_height(inner).auto_shrink([false, false]).show(ui, |ui| (m.body)(app, ui));
+        egui::ScrollArea::vertical()
+            .id_salt(("dock-scroll", salt, m.id))
+            .max_height(inner)
+            .min_scrolled_height(0.0)
+            .auto_shrink([false, false])
+            .show(ui, |ui| (m.body)(app, ui));
     }
 }
 
