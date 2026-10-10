@@ -1310,6 +1310,7 @@
 	Record ● a sequence of edits, then play ▶ it on any document.	錄製 ● 一連串編輯，然後在任何文件上播放 ▶。
 	Red	紅色
 	Redefine style by current selection	依目前選取項目重新定義樣式
+	Refine	調整
 	Reflected Gradient	反射性漸層
 	Registration Marks	對齊標記
 	Regular	標準
@@ -1637,6 +1638,7 @@
 	Mobile	行動裝置
 	Move Tool	移動工具
 	Could not use the move tool because the layer is locked.	無法使用移動工具，因為圖層已鎖定。
+	Could not complete the Free Transform command because the layer is locked.	無法完成「任意變形」指令，因為圖層已鎖定。
 	Multiply	色彩增值
 	My Brushes	我的筆刷
 	Neutrals	中間色
@@ -2395,6 +2397,8 @@ fontWeight	Italic	斜體
 	Expand Panels	展開面板
 	Close Tab	關閉標籤
 	Add Tab	新增分頁
+	Use Classic Mode	使用傳統模式
+	Auto Center Preview	自動置中預視
 	Next Document	下一個文件
 	Previous Document	上一個文件
 	W x H x Resolution	寬 x 高 x 解析度

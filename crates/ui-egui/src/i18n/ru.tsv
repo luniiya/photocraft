@@ -1511,6 +1511,7 @@
 	{name} Properties	Свойства: {name}
 	Move Tool	Перемещение
 	Could not use the move tool because the layer is locked.	Не удалось использовать инструмент «Перемещение», потому что слой заблокирован.
+	Could not complete the Free Transform command because the layer is locked.	Не удалось выполнить команду «Свободное трансформирование», потому что слой заблокирован.
 	Rectangular Marquee Tool	Прямоугольная область
 	Elliptical Marquee Tool	Овальная область
 	Brush Tool	Кисть
@@ -2080,6 +2081,7 @@
 	Quality	Качество
 	Recent	Недавние
 	Reconstruct	Восстановление
+	Refine	Уточнение
 	Registration Marks	Кресты приводки
 	Regular	Обычный
 	Remove stop	Удалить ограничитель
@@ -2702,6 +2704,8 @@ fontWeight	Italic	Курсив
 	Expand Panels	Развернуть панели
 	Close Tab	Закрыть вкладку
 	Add Tab	Добавить вкладку
+	Use Classic Mode	Использовать классический режим
+	Auto Center Preview	Автоматически центрировать просмотр
 	Next Document	Следующий документ
 	Previous Document	Предыдущий документ
 	W x H x Resolution	Ш x В x Разрешение

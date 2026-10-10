@@ -1319,6 +1319,7 @@
 	Record ● a sequence of edits, then play ▶ it on any document.	Zaznamenejte ● posloupnost úprav a pak ji přehrajte ▶ na libovolném dokumentu.
 	Red	Červená
 	Redefine style by current selection	Předefinovat styl podle aktuálního výběru
+	Refine	Upřesnit
 	Reflected Gradient	Zrcadlený přechod
 	Registration Marks	Soutiskové značky
 	Regular	Obyčejné
@@ -1647,6 +1648,7 @@
 	Mobile	Mobilní zařízení
 	Move Tool	Nástroj přesun
 	Could not use the move tool because the layer is locked.	Nástroj Přesun nelze použít, protože vrstva je zamčená.
+	Could not complete the Free Transform command because the layer is locked.	Příkaz Volná transformace nelze dokončit, protože vrstva je zamčená.
 	Multiply	Násobit
 	My Brushes	Moje štětce
 	Neutrals	Neutrální
@@ -2418,6 +2420,8 @@ fontWeight	Italic	Kurzíva
 	Expand Panels	Rozbalit panely
 	Close Tab	Zavřít kartu
 	Add Tab	Přidat kartu
+	Use Classic Mode	Použít klasický režim
+	Auto Center Preview	Automaticky vystředit náhled
 	Next Document	Další dokument
 	Previous Document	Předchozí dokument
 	W x H x Resolution	Š x V x Rozlišení

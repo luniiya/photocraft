@@ -1280,6 +1280,7 @@
 	Record ● a sequence of edits, then play ▶ it on any document.	연속된 편집을 ● 기록한 다음 원하는 문서에서 ▶ 재생하세요.
 	Red	빨강
 	Redefine style by current selection	현재 선택으로 스타일 재정의
+	Refine	다듬기
 	Reflected Gradient	반사 그레이디언트
 	Registration Marks	맞춤 표시
 	Regular	보통
@@ -1605,6 +1606,7 @@
 	Mobile	모바일
 	Move Tool	이동 도구
 	Could not use the move tool because the layer is locked.	레이어가 잠겨 있어 이동 도구를 사용할 수 없습니다.
+	Could not complete the Free Transform command because the layer is locked.	레이어가 잠겨 있어 자유 변형 명령을 완료할 수 없습니다.
 	Multiply	곱하기
 	My Brushes	내 브러시
 	Neutrals	중립색
@@ -2996,6 +2998,8 @@ fontWeight	Italic	기울임
 	Expand Panels	패널 확장
 	Close Tab	탭 닫기
 	Add Tab	탭 추가
+	Use Classic Mode	클래식 모드 사용
+	Auto Center Preview	미리 보기 자동 가운데 맞춤
 	Next Document	다음 문서
 	Previous Document	이전 문서
 	W x H x Resolution	폭 x 높이 x 해상도

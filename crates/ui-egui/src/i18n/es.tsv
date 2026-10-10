@@ -1304,6 +1304,7 @@
 	Record ● a sequence of edits, then play ▶ it on any document.	Graba ● una secuencia de ediciones y reprodúcela ▶ en cualquier documento.
 	Red	Rojo
 	Redefine style by current selection	Redefinir el estilo con la selección actual
+	Refine	Refinar
 	Reflected Gradient	Degradado reflejado
 	Registration Marks	Marcas de registro
 	Regular	Normal
@@ -1631,6 +1632,7 @@
 	Mobile	Móvil
 	Move Tool	Herramienta Mover
 	Could not use the move tool because the layer is locked.	No se pudo usar la herramienta Mover porque la capa está bloqueada.
+	Could not complete the Free Transform command because the layer is locked.	No se pudo completar el comando Transformación libre porque la capa está bloqueada.
 	Multiply	Multiplicar
 	My Brushes	Mis pinceles
 	Neutrals	Neutros
@@ -2486,6 +2488,8 @@ fontWeight	Italic	Cursiva
 	Expand Panels	Expandir paneles
 	Close Tab	Cerrar pestaña
 	Add Tab	Añadir pestaña
+	Use Classic Mode	Usar modo clásico
+	Auto Center Preview	Centrar previsualización automáticamente
 	Next Document	Documento siguiente
 	Previous Document	Documento anterior
 	W x H x Resolution	An. x Al. x Resolución

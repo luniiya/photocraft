@@ -1287,6 +1287,7 @@
 	Record ● a sequence of edits, then play ▶ it on any document.	Grave ● uma sequência de edições e depois reproduza-a ▶ em qualquer documento.
 	Red	Vermelho
 	Redefine style by current selection	Redefinir o estilo pela seleção atual
+	Refine	Refinar
 	Reflected Gradient	Degradê refletido
 	Registration Marks	Marcas de registro
 	Regular	Regular
@@ -1609,6 +1610,7 @@
 	Mobile	Dispositivos móveis
 	Move Tool	Ferramenta Mover
 	Could not use the move tool because the layer is locked.	Não foi possível usar a ferramenta Mover porque a camada está bloqueada.
+	Could not complete the Free Transform command because the layer is locked.	Não foi possível concluir o comando Transformação livre porque a camada está bloqueada.
 	Multiply	Multiplicação
 	My Brushes	Meus pincéis
 	Neutrals	Neutros
@@ -2845,6 +2847,8 @@ fontWeight	Italic	Itálico
 	Expand Panels	Expandir painéis
 	Close Tab	Fechar guia
 	Add Tab	Adicionar aba
+	Use Classic Mode	Usar modo clássico
+	Auto Center Preview	Centralizar visualização automaticamente
 	Next Document	Próximo documento
 	Previous Document	Documento anterior
 	W x H x Resolution	L x A x Resolução

@@ -1313,6 +1313,7 @@
 	Record ● a sequence of edits, then play ▶ it on any document.	录制 ● 一系列编辑，然后在任意文档上播放 ▶。
 	Red	红色
 	Redefine style by current selection	用当前选区重新定义样式
+	Refine	调整
 	Reflected Gradient	对称渐变
 	Registration Marks	套准标记
 	Regular	常规
@@ -1644,6 +1645,7 @@
 	Mobile	移动设备
 	Move Tool	移动工具
 	Could not use the move tool because the layer is locked.	无法使用移动工具，因为图层已锁定。
+	Could not complete the Free Transform command because the layer is locked.	无法完成“自由变换”命令，因为图层已锁定。
 	Multiply	正片叠底
 	My Brushes	我的画笔
 	Neutrals	中性色
@@ -2426,6 +2428,8 @@ fontWeight	Italic	斜体
 	Expand Panels	展开面板
 	Close Tab	关闭标签
 	Add Tab	添加标签页
+	Use Classic Mode	使用经典模式
+	Auto Center Preview	自动居中预览
 	Next Document	下一个文档
 	Previous Document	上一个文档
 	W x H x Resolution	宽 x 高 x 分辨率
