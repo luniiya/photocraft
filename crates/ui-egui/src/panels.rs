@@ -1415,7 +1415,7 @@ fn pro_rail(app: &mut PhotocraftApp, ui: &mut egui::Ui, t: &Tokens) {
                 ("clock", tl!("History"), "history"),
             ] {
                 let dock = &app.ui.dock;
-                let on = dock.section_of(id).and_then(|i| dock.sections.get(i)).is_some_and(|s| !s.collapsed);
+                let on = dock.pane_of(id).and_then(|i| dock.panes.get(i)).is_some_and(|s| !s.collapsed);
                 if icons::rail_button(ui, icon, 28.0, on, name).clicked() {
                     crate::dock::rail_click(app, id);
                 }
@@ -1444,7 +1444,7 @@ pub fn request_dock_width(ctx: &egui::Context, w: f32) {
 
 fn dock_panels(app: &mut PhotocraftApp, ui: &mut egui::Ui, t: &Tokens) {
     // Studio keeps its header (collapse to icons, add a panel) even with every module closed.
-    if !t.dock_inspector && app.ui.dock.sections.is_empty() {
+    if !t.dock_inspector && app.ui.dock.panes.is_empty() {
         return;
     }
     let margin = if t.pro { 2 } else { 8 };
@@ -1457,7 +1457,7 @@ fn dock_panels(app: &mut PhotocraftApp, ui: &mut egui::Ui, t: &Tokens) {
             crate::dock::inspector_header(app, ui);
             ui.add_space(4.0);
         }
-        // Sections keep their heights whatever they show (#88): see `dock`.
+        // Panes keep their heights whatever they show (#88): see `dock`.
         crate::dock::show(app, ui);
     });
 }

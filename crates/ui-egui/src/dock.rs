@@ -1,11 +1,11 @@
-//! Right-dock layout: a column of sections, each a tab strip of [modules](crate::modules).
+//! Right-dock layout: a column of panes, each a tab strip of [modules](crate::modules).
 //!
-//! Any module can sit in any section. Drag a tab onto another section's strip to group it there,
-//! between two sections (or past the last) to give it a section of its own, and drag a strip's
-//! empty part to move the whole section. A section's height never follows its content: content
-//! taller than the section scrolls inside it, and the last expanded section (Layers by default)
+//! Any module can sit in any pane. Drag a tab onto another pane's strip to group it there,
+//! between two panes (or past the last) to give it a pane of its own, and drag a strip's
+//! empty part to move the whole pane. A pane's height never follows its content: content
+//! taller than the pane scrolls inside it, and the last expanded pane (Layers by default)
 //! fills what the others leave, so the column itself never scrolls. Drag the gap between two
-//! sections to resize them; collapse a section to its tab strip with a double-click (Pro) or its
+//! panes to resize them; collapse a pane to its tab strip with a double-click (Pro) or its
 //! chevron (Studio). Window › Workspace › Lock Workspace freezes all of it.
 //!
 //! In the Pro themes the dock looks and behaves like Photoshop's (tab strips, the icon rail at its
@@ -28,10 +28,10 @@ use crate::modules::{self, Module};
 use crate::theme::Tokens;
 use crate::widgets;
 
-/// One section of the dock: a tab strip of modules.
+/// One pane of the dock: a tab strip of modules.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Section {
+pub struct Pane {
     /// Module ids, in tab order.
     pub tabs: Vec<String>,
     /// The front tab's module id.
@@ -44,7 +44,7 @@ pub struct Section {
     pub collapsed: bool,
 }
 
-impl Section {
+impl Pane {
     pub fn new(tabs: &[&str]) -> Self {
         Self { tabs: tabs.iter().map(|s| (*s).to_owned()).collect(), active: tabs.first().map(|s| (*s).to_owned()).unwrap_or_default(), ..Self::default() }
     }
@@ -54,7 +54,7 @@ impl Section {
         if self.tabs.contains(&self.active) { &self.active } else { self.tabs.first().map_or("", String::as_str) }
     }
 
-    /// The module that sizes the section: its first tab.
+    /// The module that sizes the pane: its first tab.
     fn lead(&self) -> Option<&'static Module> {
         self.tabs.iter().find_map(|t| modules::get(t))
     }
@@ -90,11 +90,12 @@ impl Section {
     }
 }
 
-/// The dock's sections, top to bottom, and (Studio) whether it is collapsed to its icon rail.
+/// The dock's panes, top to bottom, and (Studio) whether it is collapsed to its icon rail.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DockLayout {
-    pub sections: Vec<Section>,
+    #[serde(alias = "sections")]
+    pub panes: Vec<Pane>,
     /// Studio themes: the inspector is collapsed to an icon rail.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub rail: bool,
@@ -109,12 +110,12 @@ impl Default for DockLayout {
     }
 }
 
-/// Gap between sections; it is also the splitter's grab area.
+/// Gap between panes; it is also the splitter's grab area.
 pub const GAP: f32 = 6.0;
 /// Upper bound on a stored height (guards against absurd values from `ui.set`).
 const MAX_HEIGHT: f32 = 4000.0;
-/// Most sections a layout keeps (guards against absurd `ui.set` input).
-const MAX_SECTIONS: usize = 64;
+/// Most panes a layout keeps (guards against absurd `ui.set` input).
+const MAX_PANES: usize = 64;
 
 /// The fixed groups of layouts saved before modules, and of the workspace presets, in Photoshop's
 /// Essentials order. Pro puts Color before Swatches, like Photoshop; Studio leads with Swatches.
@@ -137,16 +138,16 @@ pub fn group_tabs(key: &str, pro: bool) -> &'static [&'static str] {
 /// Where a dragged tab lands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Drop {
-    /// Join section `i` as its front tab.
+    /// Join pane `i` as its front tab.
     Join(usize),
-    /// A section of its own, inserted at index `i` (`sections.len()` = last).
+    /// A pane of its own, inserted at index `i` (`panes.len()` = last).
     NewAt(usize),
 }
 
 impl DockLayout {
     /// A layout of preset groups (`GROUPS` keys), in the order given.
     pub fn preset(groups: &[&str], pro: bool) -> Self {
-        Self { sections: groups.iter().map(|g| Section::new(group_tabs(g, pro))).filter(|s| !s.tabs.is_empty()).collect(), rail: false, flyout: None }
+        Self { panes: groups.iter().map(|g| Pane::new(group_tabs(g, pro))).filter(|s| !s.tabs.is_empty()).collect(), rail: false, flyout: None }
     }
 
     /// Photoshop's Essentials: Color, Properties, Layers.
@@ -159,7 +160,7 @@ impl DockLayout {
     /// first when it was.
     pub fn follow_theme(&mut self, pro: bool) {
         let (from, to) = (group_tabs("color", !pro), group_tabs("color", pro));
-        for s in &mut self.sections {
+        for s in &mut self.panes {
             if s.tabs.iter().map(String::as_str).eq(from.iter().copied()) {
                 if from.first().is_some_and(|f| s.active == *f) {
                     s.active = to.first().map(|t| (*t).to_owned()).unwrap_or_default();
@@ -169,31 +170,31 @@ impl DockLayout {
         }
     }
 
-    /// The section holding module `id`.
-    pub fn section_of(&self, id: &str) -> Option<usize> {
-        self.sections.iter().position(|s| s.tabs.iter().any(|t| t == id))
+    /// The pane holding module `id`.
+    pub fn pane_of(&self, id: &str) -> Option<usize> {
+        self.panes.iter().position(|s| s.tabs.iter().any(|t| t == id))
     }
 
     /// Module `id` is in the dock (collapsed or not).
     pub fn visible(&self, id: &str) -> bool {
-        self.section_of(id).is_some()
+        self.pane_of(id).is_some()
     }
 
-    /// Module `id` is its section's front tab and the section is expanded.
+    /// Module `id` is its pane's front tab and the pane is expanded.
     pub fn is_front(&self, id: &str) -> bool {
-        self.section_of(id).and_then(|i| self.sections.get(i)).is_some_and(|s| !s.collapsed && s.front() == id)
+        self.pane_of(id).and_then(|i| self.panes.get(i)).is_some_and(|s| !s.collapsed && s.front() == id)
     }
 
-    /// Bring module `id` forward: added if it isn't in the dock (to a section holding one of its
-    /// siblings, else a new section above the filling one), made its section's front tab, and the
-    /// section expanded. A panel asked for always comes back, whatever state it was left in (#129).
+    /// Bring module `id` forward: added if it isn't in the dock (to a pane holding one of its
+    /// siblings, else a new pane above the filling one), made its pane's front tab, and the
+    /// pane expanded. A panel asked for always comes back, whatever state it was left in (#129).
     pub fn show(&mut self, id: &str) {
         let Some(m) = modules::get(id) else { return };
-        let i = match self.section_of(id) {
+        let i = match self.pane_of(id) {
             Some(i) => i,
-            None => match m.siblings.iter().find_map(|s| self.section_of(s)) {
+            None => match m.siblings.iter().find_map(|s| self.pane_of(s)) {
                 Some(i) => {
-                    if let Some(s) = self.sections.get_mut(i) {
+                    if let Some(s) = self.panes.get_mut(i) {
                         s.tabs.push(id.to_owned());
                     }
                     i
@@ -202,42 +203,42 @@ impl DockLayout {
                     // A preset group's module brings its whole group back, in its Essentials place.
                     Some(g) => {
                         self.show_group(g, true);
-                        let Some(i) = self.section_of(id) else { return };
+                        let Some(i) = self.pane_of(id) else { return };
                         i
                     }
                     None => {
                         // Above the filler, so Layers keeps the rest of the column.
-                        let at = self.sections.iter().rposition(|s| !s.collapsed).unwrap_or(self.sections.len());
-                        self.sections.insert(at, Section::new(&[id]));
+                        let at = self.panes.iter().rposition(|s| !s.collapsed).unwrap_or(self.panes.len());
+                        self.panes.insert(at, Pane::new(&[id]));
                         at
                     }
                 },
             },
         };
-        if let Some(s) = self.sections.get_mut(i) {
+        if let Some(s) = self.panes.get_mut(i) {
             s.active = id.to_owned();
             s.collapsed = false;
         }
     }
 
-    /// Take module `id` out of the dock; a section left empty goes too.
+    /// Take module `id` out of the dock; a pane left empty goes too.
     pub fn close(&mut self, id: &str) {
-        for s in &mut self.sections {
+        for s in &mut self.panes {
             s.tabs.retain(|t| t != id);
         }
-        self.sections.retain(|s| !s.tabs.is_empty());
+        self.panes.retain(|s| !s.tabs.is_empty());
         if self.flyout.as_deref() == Some(id) {
             self.flyout = None;
         }
     }
 
-    /// Hide the section holding module `id` (Window › <panel> on a showing panel hides its group,
+    /// Hide the pane holding module `id` (Window › <panel> on a showing panel hides its group,
     /// like Photoshop).
     pub fn hide(&mut self, id: &str) {
-        if let Some(i) = self.section_of(id) {
-            self.sections.remove(i);
+        if let Some(i) = self.pane_of(id) {
+            self.panes.remove(i);
         }
-        if self.flyout.as_deref().is_some_and(|f| self.section_of(f).is_none()) {
+        if self.flyout.as_deref().is_some_and(|f| self.pane_of(f).is_none()) {
             self.flyout = None;
         }
     }
@@ -261,7 +262,7 @@ impl DockLayout {
     }
 
     /// Show a preset group: its front module is brought forward, or (none of it showing) the
-    /// whole group comes back as a section, in its Essentials place.
+    /// whole group comes back as a pane, in its Essentials place.
     pub fn show_group(&mut self, key: &str, pro: bool) {
         let tabs = group_tabs(key, pro);
         if let Some(id) = tabs.iter().find(|m| self.visible(m)) {
@@ -271,11 +272,11 @@ impl DockLayout {
         if tabs.is_empty() {
             return;
         }
-        // Below the last section that holds a group preceding it in GROUPS.
-        let rank = |s: &Section| GROUPS.iter().position(|g| group_tabs(g, pro).iter().any(|m| s.tabs.iter().any(|t| t == m)));
+        // Below the last pane that holds a group preceding it in GROUPS.
+        let rank = |s: &Pane| GROUPS.iter().position(|g| group_tabs(g, pro).iter().any(|m| s.tabs.iter().any(|t| t == m)));
         let mine = GROUPS.iter().position(|g| *g == key);
-        let at = self.sections.iter().rposition(|s| rank(s).zip(mine).is_some_and(|(r, me)| r < me)).map_or(0, |i| i + 1);
-        self.sections.insert(at.min(self.sections.len()), Section::new(tabs));
+        let at = self.panes.iter().rposition(|s| rank(s).zip(mine).is_some_and(|(r, me)| r < me)).map_or(0, |i| i + 1);
+        self.panes.insert(at.min(self.panes.len()), Pane::new(tabs));
     }
 
     /// Hide every module of a preset group.
@@ -286,33 +287,33 @@ impl DockLayout {
     }
 
     pub fn set_collapsed(&mut self, i: usize, on: bool) {
-        if let Some(s) = self.sections.get_mut(i) {
+        if let Some(s) = self.panes.get_mut(i) {
             s.collapsed = on;
         }
     }
 
-    /// Move section `i` so it is drawn just before section `before` (or last when `None`).
-    pub fn move_section(&mut self, i: usize, before: Option<usize>) {
-        if before == Some(i) || i >= self.sections.len() {
+    /// Move pane `i` so it is drawn just before pane `before` (or last when `None`).
+    pub fn move_pane(&mut self, i: usize, before: Option<usize>) {
+        if before == Some(i) || i >= self.panes.len() {
             return;
         }
-        let s = self.sections.remove(i);
+        let s = self.panes.remove(i);
         let at = match before {
             Some(b) if b > i => b - 1,
             Some(b) => b,
-            None => self.sections.len(),
+            None => self.panes.len(),
         };
-        self.sections.insert(at.min(self.sections.len()), s);
+        self.panes.insert(at.min(self.panes.len()), s);
     }
 
-    /// Put module `id` in section `i` as its front tab, from wherever it is (or isn't).
+    /// Put module `id` in pane `i` as its front tab, from wherever it is (or isn't).
     pub fn drop_tab_or_add(&mut self, id: &str, i: usize) {
-        if modules::get(id).is_none() || i >= self.sections.len() {
+        if modules::get(id).is_none() || i >= self.panes.len() {
             return;
         }
-        if self.section_of(id).is_some() {
+        if self.pane_of(id).is_some() {
             self.drop_tab(id, Drop::Join(i));
-        } else if let Some(s) = self.sections.get_mut(i) {
+        } else if let Some(s) = self.panes.get_mut(i) {
             s.tabs.push(id.to_owned());
             s.active = id.to_owned();
             s.collapsed = false;
@@ -321,34 +322,34 @@ impl DockLayout {
 
     /// Move module `id` to where a tab drag dropped it.
     pub fn drop_tab(&mut self, id: &str, to: Drop) {
-        let Some(from) = self.section_of(id) else { return };
-        let alone = self.sections.get(from).is_some_and(|s| s.tabs.len() == 1);
+        let Some(from) = self.pane_of(id) else { return };
+        let alone = self.panes.get(from).is_some_and(|s| s.tabs.len() == 1);
         match to {
-            Drop::Join(t) if t == from || t >= self.sections.len() => return,
+            Drop::Join(t) if t == from || t >= self.panes.len() => return,
             Drop::NewAt(k) if alone && (k == from || k == from + 1) => return,
             _ => {}
         }
-        if let Some(s) = self.sections.get_mut(from) {
+        if let Some(s) = self.panes.get_mut(from) {
             s.tabs.retain(|t| t != id);
         }
         match to {
             Drop::Join(t) => {
-                if let Some(s) = self.sections.get_mut(t) {
+                if let Some(s) = self.panes.get_mut(t) {
                     s.tabs.push(id.to_owned());
                     s.active = id.to_owned();
                     s.collapsed = false;
                 }
             }
-            Drop::NewAt(k) => self.sections.insert(k.min(self.sections.len()), Section::new(&[id])),
+            Drop::NewAt(k) => self.panes.insert(k.min(self.panes.len()), Pane::new(&[id])),
         }
-        self.sections.retain(|s| !s.tabs.is_empty());
+        self.panes.retain(|s| !s.tabs.is_empty());
     }
 
-    /// Drop unknown and repeated modules, empty sections and absurd heights (input from files,
+    /// Drop unknown and repeated modules, empty panes and absurd heights (input from files,
     /// `ui.set` or a plug-in that is gone).
     pub fn sanitize(&mut self) {
         let mut seen: Vec<String> = Vec::new();
-        for s in &mut self.sections {
+        for s in &mut self.panes {
             s.tabs.retain(|t| {
                 let keep = modules::get(t).is_some() && !seen.contains(t);
                 if keep {
@@ -361,21 +362,21 @@ impl DockLayout {
             }
             s.height = s.height.filter(|h| h.is_finite() && *h > 0.0).map(|h| h.min(MAX_HEIGHT));
         }
-        self.sections.retain(|s| !s.tabs.is_empty());
-        self.sections.truncate(MAX_SECTIONS);
+        self.panes.retain(|s| !s.tabs.is_empty());
+        self.panes.truncate(MAX_PANES);
         if self.flyout.as_deref().is_some_and(|f| !self.visible(f)) {
             self.flyout = None;
         }
     }
 
-    /// Lay out the sections in a column `avail` points tall with `strip`-high tab strips.
-    /// Returns each section's height. The last expanded section fills the rest. Sections the user
+    /// Lay out the panes in a column `avail` points tall with `strip`-high tab strips.
+    /// Returns each pane's height. The last expanded pane fills the rest. Panes the user
     /// never resized give way first, down to their compact heights, so the filler gets its
     /// preferred height (Layers: ~10 rows, #147); when the column is still too short every
-    /// section gives way down to its minimum height.
+    /// pane gives way down to its minimum height.
     pub fn heights_for(&self, avail: f32, strip: f32) -> Vec<f32> {
         let avail = if avail.is_finite() { avail.max(0.0) } else { 0.0 };
-        let secs = &self.sections;
+        let secs = &self.panes;
         let filler = secs.iter().rposition(|s| !s.collapsed);
         let mut hs: Vec<f32> = secs
             .iter()
@@ -392,8 +393,8 @@ impl DockLayout {
             .collect();
         if let Some(f) = filler {
             let gaps = GAP * secs.len().saturating_sub(1) as f32;
-            let min_fill = secs.get(f).map_or(0.0, Section::min_height);
-            let pref_fill = secs.get(f).map_or(0.0, Section::preferred_fill);
+            let min_fill = secs.get(f).map_or(0.0, Pane::min_height);
+            let pref_fill = secs.get(f).map_or(0.0, Pane::preferred_fill);
             let used: f32 = hs.iter().sum::<f32>() + gaps;
             let mut deficit = (used + pref_fill - avail).max(0.0);
             for i in (0..f).rev() {
@@ -412,7 +413,7 @@ impl DockLayout {
             }
             let used: f32 = hs.iter().sum::<f32>() + gaps;
             let mut deficit = (used + min_fill - avail).max(0.0);
-            // Squeeze the expanded sections nearest the filler first.
+            // Squeeze the expanded panes nearest the filler first.
             for i in (0..f).rev() {
                 if deficit <= 0.0 {
                     break;
@@ -435,30 +436,30 @@ impl DockLayout {
         hs
     }
 
-    /// Splitter `i` (below section `i`) dragged by `dy`: section `i` grows or shrinks against the
-    /// next expanded section (or the filler, which absorbs the difference).
+    /// Splitter `i` (below pane `i`) dragged by `dy`: pane `i` grows or shrinks against the
+    /// next expanded pane (or the filler, which absorbs the difference).
     fn resize(&mut self, heights: &[f32], i: usize, dy: f32) {
         if !dy.is_finite() || dy == 0.0 {
             return;
         }
         let Some(&h) = heights.get(i) else { return };
-        let filler = self.sections.iter().rposition(|s| !s.collapsed);
-        let Some(j) = self.sections.iter().enumerate().skip(i + 1).find(|(_, s)| !s.collapsed).map(|(j, _)| j) else { return };
+        let filler = self.panes.iter().rposition(|s| !s.collapsed);
+        let Some(j) = self.panes.iter().enumerate().skip(i + 1).find(|(_, s)| !s.collapsed).map(|(j, _)| j) else { return };
         let Some(&nh) = heights.get(j) else { return };
-        let (Some(min_i), Some(min_j)) = (self.sections.get(i).map(Section::min_height), self.sections.get(j).map(Section::min_height)) else { return };
-        // The first drag pins the other sections at the heights they show, so sections still at
+        let (Some(min_i), Some(min_j)) = (self.panes.get(i).map(Pane::min_height), self.panes.get(j).map(Pane::min_height)) else { return };
+        // The first drag pins the other panes at the heights they show, so panes still at
         // their defaults (which give way to the filler) don't shift while this one is resized.
-        for (k, (s, sh)) in self.sections.iter_mut().zip(heights).enumerate() {
+        for (k, (s, sh)) in self.panes.iter_mut().zip(heights).enumerate() {
             if Some(k) != filler && !s.collapsed && s.height.is_none() {
                 s.height = Some(*sh);
             }
         }
         let new_h = (h + dy).clamp(min_i, (h + nh - min_j).max(min_i));
-        if let Some(s) = self.sections.get_mut(i) {
+        if let Some(s) = self.panes.get_mut(i) {
             s.height = Some(new_h);
         }
         if Some(j) != filler
-            && let Some(s) = self.sections.get_mut(j)
+            && let Some(s) = self.panes.get_mut(j)
         {
             s.height = Some((nh - (new_h - h)).max(min_j));
         }
@@ -476,51 +477,51 @@ pub fn reveal(app: &mut PhotocraftApp, id: &str) {
     app.ui.panels.dock = true;
 }
 
-/// Pro icon rail click: a hidden module is shown, a collapsed section expanded and an expanded
+/// Pro icon rail click: a hidden module is shown, a collapsed pane expanded and an expanded
 /// one collapsed to its tab strip. A docked panel is never hidden from the rail (it used to
 /// toggle visibility, so one stray click made a panel vanish: #129).
 pub fn rail_click(app: &mut PhotocraftApp, id: &str) {
-    match app.ui.dock.section_of(id) {
+    match app.ui.dock.pane_of(id) {
         None => reveal(app, id),
         Some(i) => {
-            let collapse = app.ui.dock.sections.get(i).is_some_and(|s| !s.collapsed);
+            let collapse = app.ui.dock.panes.get(i).is_some_and(|s| !s.collapsed);
             app.ui.dock.set_collapsed(i, collapse);
         }
     }
 }
 
-/// Per-section interactions collected while drawing, applied afterwards.
+/// Per-pane interactions collected while drawing, applied afterwards.
 enum Action {
     Select(usize, String),
     ToggleCollapse(usize),
-    CloseSection(usize),
+    ClosePane(usize),
     CloseTab(String),
-    MoveSection(usize, Option<usize>),
+    MovePane(usize, Option<usize>),
     DropTab(String, Drop),
 }
 
-/// Rects of the sections drawn last frame (screen points), keyed by their front module, for
+/// Rects of the panes drawn last frame (screen points), keyed by their front module, for
 /// tests and automation.
 pub fn last_rects(ctx: &egui::Context) -> Vec<(String, Rect)> {
     ctx.data(|d| d.get_temp::<Vec<(String, Rect)>>(rects_id())).unwrap_or_default()
 }
 
-/// The rect of the section holding module `id`, as drawn last frame.
+/// The rect of the pane holding module `id`, as drawn last frame.
 pub fn module_rect(app: &PhotocraftApp, ctx: &egui::Context, id: &str) -> Option<Rect> {
-    let i = app.ui.dock.section_of(id)?;
-    let s = app.ui.dock.sections.get(i)?;
+    let i = app.ui.dock.pane_of(id)?;
+    let s = app.ui.dock.panes.get(i)?;
     last_rects(ctx).into_iter().find(|(f, _)| f == s.front()).map(|(_, r)| r)
 }
 
 fn rects_id() -> egui::Id {
-    egui::Id::new("dock-section-rects")
+    egui::Id::new("dock-pane-rects")
 }
 
-/// A section's tab strip as drawn last frame (screen points), for tests and automation.
+/// A pane's tab strip as drawn last frame (screen points), for tests and automation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StripRects {
-    /// The section's index, top to bottom.
-    pub section: usize,
+    /// The pane's index, top to bottom.
+    pub pane: usize,
     /// `(module id, rect)` of the tabs on the strip (the others are in the chevron menu).
     pub tabs: Vec<(String, Rect)>,
     /// The panel menu button.
@@ -541,7 +542,7 @@ fn strips_id() -> egui::Id {
     egui::Id::new("dock-strip-rects")
 }
 
-/// Height of a section's tab strip (a collapsed section is just this).
+/// Height of a pane's tab strip (a collapsed pane is just this).
 pub fn strip_height(pro: bool) -> f32 {
     if pro { 28.0 } else { 40.0 }
 }
@@ -557,7 +558,7 @@ fn module_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, m: &Module, salt: &st
     }
 }
 
-/// Draw the dock's sections filling `ui`.
+/// Draw the dock's panes filling `ui`.
 pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let strip = strip_height(t.pro);
@@ -571,11 +572,11 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let mut tab_drag: Option<String> = None;
     let mut tab_dropped: Option<String> = None;
     let mut strips: Vec<StripRects> = Vec::with_capacity(rects.len());
-    let sections = app.ui.dock.sections.clone();
-    let count = sections.len();
-    for (i, (sec, rect)) in sections.iter().zip(rects.iter().copied()).enumerate() {
+    let panes = app.ui.dock.panes.clone();
+    let count = panes.len();
+    for (i, (sec, rect)) in panes.iter().zip(rects.iter().copied()).enumerate() {
         let collapsed = sec.collapsed;
-        let mut child = ui.new_child(egui::UiBuilder::new().id_salt(("dock-section", sec.key())).max_rect(rect));
+        let mut child = ui.new_child(egui::UiBuilder::new().id_salt(("dock-pane", sec.key())).max_rect(rect));
         child.set_clip_rect(rect.intersect(ui.clip_rect()));
         child.spacing_mut().item_spacing.y = if t.pro { 0.0 } else { 6.0 };
         let mods: Vec<&'static Module> = sec.tabs.iter().filter_map(|id| modules::get(id)).collect();
@@ -592,7 +593,7 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             }
         });
         strips.push(StripRects {
-            section: i,
+            pane: i,
             tabs: resp.tabs.iter().filter_map(|(k, r)| mods.get(*k).map(|m| (m.id.to_owned(), *r))).collect(),
             menu: resp.menu.rect,
             chevron: resp.chevron,
@@ -611,14 +612,14 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         actions.push(Action::CloseTab(m.id.to_owned()));
                     }
                 }
-                crate::tab_strip::TabContextAction::CloseGroup => actions.push(Action::CloseSection(i)),
+                crate::tab_strip::TabContextAction::CloseGroup => actions.push(Action::ClosePane(i)),
             }
         }
         if resp.strip.double_clicked() || resp.tab_double_clicked || (collapsed && resp.tab_clicked) || resp.collapse.as_ref().is_some_and(|r| r.clicked()) {
             actions.push(Action::ToggleCollapse(i));
         }
         if resp.close.as_ref().is_some_and(|r| r.clicked()) {
-            actions.push(Action::CloseSection(i));
+            actions.push(Action::ClosePane(i));
         }
         if !locked {
             if resp.strip.dragged() {
@@ -627,7 +628,7 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             if resp.strip.drag_stopped()
                 && let Some(p) = ui.ctx().pointer_interact_pos()
             {
-                actions.push(Action::MoveSection(i, section_drop_before(&rects, i, p.y)));
+                actions.push(Action::MovePane(i, pane_drop_before(&rects, i, p.y)));
             }
             if let Some(m) = resp.tab_drag.and_then(|k| mods.get(k)) {
                 tab_drag = Some(m.id.to_owned());
@@ -655,11 +656,11 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 ui.close();
             }
             if ui.add_enabled(!locked && i > 0, egui::Button::new(tl!("Move Group Up"))).clicked() {
-                actions.push(Action::MoveSection(i, Some(i.saturating_sub(1))));
+                actions.push(Action::MovePane(i, Some(i.saturating_sub(1))));
                 ui.close();
             }
             if ui.add_enabled(!locked && i + 1 < count, egui::Button::new(tl!("Move Group Down"))).clicked() {
-                actions.push(Action::MoveSection(i, if i + 2 < count { Some(i + 2) } else { None }));
+                actions.push(Action::MovePane(i, if i + 2 < count { Some(i + 2) } else { None }));
                 ui.close();
             }
             ui.separator();
@@ -670,12 +671,12 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 ui.close();
             }
             if ui.button(tl!("Close Tab Group")).clicked() {
-                actions.push(Action::CloseSection(i));
+                actions.push(Action::ClosePane(i));
                 ui.close();
             }
         });
-        // Splitter in the gap below this section: resizes it against the next expanded one.
-        if i + 1 < count && !collapsed && sections.iter().skip(i + 1).any(|s| !s.collapsed) {
+        // Splitter in the gap below this pane: resizes it against the next expanded one.
+        if i + 1 < count && !collapsed && panes.iter().skip(i + 1).any(|s| !s.collapsed) {
             let gap = Rect::from_min_size(pos2(rect.left(), rect.bottom()), vec2(rect.width(), GAP)).expand2(vec2(0.0, 2.0));
             let sresp = ui.interact(gap, ui.id().with(("dock-splitter", i)), Sense::drag());
             if sresp.hovered() || sresp.dragged() {
@@ -688,24 +689,24 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         }
     }
     let pointer = ui.ctx().pointer_interact_pos();
-    // A section dragged by its strip: an insertion line where it would land.
+    // A pane dragged by its strip: an insertion line where it would land.
     if let (Some(i), Some(p)) = (moving, pointer) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-        let before = section_drop_before(&rects, i, p.y);
+        let before = pane_drop_before(&rects, i, p.y);
         let line_y = match before.and_then(|b| rects.get(b)) {
             Some(r) => r.top() - GAP / 2.0,
             None => rects.last().map_or(area.top(), |r| r.bottom() + GAP / 2.0),
         };
         ui.painter().line_segment([pos2(area.left(), line_y), pos2(area.right(), line_y)], Stroke::new(3.0, t.accent));
     }
-    // A tab dragged: outline the section it would join, or a line where its new section would go.
+    // A tab dragged: outline the pane it would join, or a line where its new pane would go.
     if let (Some(id), Some(p)) = (tab_drag.as_ref().or(tab_dropped.as_ref()), pointer) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         let target = tab_drop_target(&rects, strip, p);
         match target {
             Drop::Join(k) => {
                 if let Some(r) = rects.get(k)
-                    && app.ui.dock.section_of(id) != Some(k)
+                    && app.ui.dock.pane_of(id) != Some(k)
                 {
                     ui.painter().rect_stroke(r.shrink(1.0), t.radius, Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
                 }
@@ -723,7 +724,7 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         }
     }
     ui.ctx().data_mut(|d| {
-        d.insert_temp(rects_id(), sections.iter().zip(&rects).map(|(s, r)| (s.front().to_owned(), *r)).collect::<Vec<_>>());
+        d.insert_temp(rects_id(), panes.iter().zip(&rects).map(|(s, r)| (s.front().to_owned(), *r)).collect::<Vec<_>>());
         d.insert_temp(strips_id(), strips);
     });
     ui.advance_cursor_after_rect(area);
@@ -732,25 +733,25 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         let dock = &mut app.ui.dock;
         match a {
             Action::Select(i, id) => {
-                if let Some(s) = dock.sections.get_mut(i) {
+                if let Some(s) = dock.panes.get_mut(i) {
                     s.active = id;
                 }
             }
             Action::ToggleCollapse(i) => {
-                let on = dock.sections.get(i).is_some_and(|s| !s.collapsed);
+                let on = dock.panes.get(i).is_some_and(|s| !s.collapsed);
                 dock.set_collapsed(i, on);
             }
             Action::CloseTab(id) => dock.close(&id),
-            Action::CloseSection(i) => {
-                if i < dock.sections.len() {
-                    dock.sections.remove(i);
+            Action::ClosePane(i) => {
+                if i < dock.panes.len() {
+                    dock.panes.remove(i);
                 }
             }
-            Action::MoveSection(i, before) => dock.move_section(i, before),
+            Action::MovePane(i, before) => dock.move_pane(i, before),
             Action::DropTab(id, to) => dock.drop_tab(&id, to),
         }
         // Indices shift after the first structural change; one per frame is all a user makes.
-        if dock.sections.len() != count {
+        if dock.panes.len() != count {
             break;
         }
     }
@@ -768,17 +769,17 @@ fn rects_after_layout(heights: &[f32], area: Rect) -> Vec<Rect> {
         .collect()
 }
 
-/// The section a section dragged from index `dragged` lands before when released at `y`
+/// The pane a pane dragged from index `dragged` lands before when released at `y`
 /// (`None` = last). Dropping onto itself, or just below itself, keeps its place.
-fn section_drop_before(rects: &[Rect], dragged: usize, y: f32) -> Option<usize> {
+fn pane_drop_before(rects: &[Rect], dragged: usize, y: f32) -> Option<usize> {
     match rects.iter().position(|r| y < r.center().y) {
         Some(k) if k == dragged || k == dragged + 1 => Some(dragged),
         other => other,
     }
 }
 
-/// Where a tab dragged to `p` lands: a section's tab strip, or its upper body, joins it; the
-/// lower edge of a section, a gap, or below the last section makes a new section there.
+/// Where a tab dragged to `p` lands: a pane's tab strip, or its upper body, joins it; the
+/// lower edge of a pane, a gap, or below the last pane makes a new pane there.
 fn tab_drop_target(rects: &[Rect], strip: f32, p: egui::Pos2) -> Drop {
     let edge = (strip * 0.6).max(12.0);
     for (k, r) in rects.iter().enumerate() {
@@ -823,8 +824,8 @@ pub fn picker(app: &mut PhotocraftApp, anchor: &egui::Response) {
     egui::Popup::menu(anchor).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| picker_list(app, ui, search_id, None));
 }
 
-/// The picker's search field and module list, in a popup or a section's ≡ › Add Tab (which
-/// adds the module to that section, `into`).
+/// The picker's search field and module list, in a popup or a pane's ≡ › Add Tab (which
+/// adds the module to that pane, `into`).
 pub fn picker_list(app: &mut PhotocraftApp, ui: &mut egui::Ui, search_id: egui::Id, into: Option<usize>) {
     const WIDTH: f32 = 200.0;
     ui.set_width(WIDTH);
@@ -858,7 +859,7 @@ pub fn picker_list(app: &mut PhotocraftApp, ui: &mut egui::Ui, search_id: egui::
             if row.inner.changed() || (enter && k == 0) {
                 if app.ui.dock.visible(m.id) && !(enter && k == 0) {
                     app.ui.dock.close(m.id);
-                } else if let Some(i) = into.filter(|i| *i < app.ui.dock.sections.len()) {
+                } else if let Some(i) = into.filter(|i| *i < app.ui.dock.panes.len()) {
                     app.ui.dock.drop_tab_or_add(m.id, i);
                 } else {
                     reveal(app, m.id);
@@ -868,7 +869,7 @@ pub fn picker_list(app: &mut PhotocraftApp, ui: &mut egui::Ui, search_id: egui::
     });
 }
 
-/// Studio's collapsed inspector: one icon per docked module (a line between sections), the picker
+/// Studio's collapsed inspector: one icon per docked module (a line between panes), the picker
 /// at the bottom. An icon opens its module as a flyout beside the rail; a second click closes it.
 pub fn studio_rail(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
@@ -877,8 +878,8 @@ pub fn studio_rail(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         app.ui.dock.flyout = None;
     }
     ui.add_space(6.0);
-    let sections = app.ui.dock.sections.clone();
-    for (i, s) in sections.iter().enumerate() {
+    let panes = app.ui.dock.panes.clone();
+    for (i, s) in panes.iter().enumerate() {
         if i > 0 {
             let y = ui.cursor().top() + 2.0;
             let r = ui.max_rect();
@@ -1003,7 +1004,7 @@ pub fn apply(app: &mut PhotocraftApp, v: &Value) {
     }
     let pro = is_pro(app);
     match v.get("dock") {
-        Some(d) if d.get("sections").is_some() => {
+        Some(d) if d.get("panes").is_some() || d.get("sections").is_some() => {
             if let Ok(mut d) = serde_json::from_value::<DockLayout>(d.clone()) {
                 d.sanitize();
                 app.ui.dock = d;
@@ -1020,7 +1021,7 @@ pub fn apply(app: &mut PhotocraftApp, v: &Value) {
     }
 }
 
-/// `ui.set`'s dock keys: `dock` as a whole layout (`{"sections": [...]}`) or in the pre-module
+/// `ui.set`'s dock keys: `dock` as a whole layout (`{"panes": [...]}`) or in the pre-module
 /// form (`order` / `heights` / `collapsed` / `hiddenTabs`), `panels.<group>` flags that show or
 /// hide a preset group, and `dockTabs.<group>` (front tab index within the group). Returns the
 /// new layout (`None` when no key concerns the dock); nothing is applied, so a rejected call
@@ -1057,7 +1058,7 @@ pub fn layout_from_control(app: &PhotocraftApp, panels: Option<&Value>, dock_tab
     let mut out = app.ui.dock.clone();
     if let Some(d) = dock {
         let o = d.as_object().ok_or("dock must be an object")?;
-        if o.contains_key("sections") {
+        if o.contains_key("panes") || o.contains_key("sections") {
             out = serde_json::from_value(d.clone()).map_err(|e| format!("dock: {e}"))?;
             out.sanitize();
         } else {
@@ -1070,8 +1071,7 @@ pub fn layout_from_control(app: &PhotocraftApp, panels: Option<&Value>, dock_tab
             for g in GROUPS {
                 shown.insert(g.to_owned(), json!(out.group_shown(g)));
                 let tabs = group_tabs(g, pro);
-                if let Some(i) =
-                    tabs.iter().find_map(|m| out.section_of(m)).and_then(|i| out.sections.get(i)).and_then(|s| tabs.iter().position(|m| *m == s.front()))
+                if let Some(i) = tabs.iter().find_map(|m| out.pane_of(m)).and_then(|i| out.panes.get(i)).and_then(|s| tabs.iter().position(|m| *m == s.front()))
                 {
                     front.insert(g.to_owned(), json!(i));
                 }
@@ -1087,7 +1087,7 @@ pub fn layout_from_control(app: &PhotocraftApp, panels: Option<&Value>, dock_tab
         }
     }
     for (_, id) in fronts {
-        if let Some(s) = out.section_of(id).and_then(|i| out.sections.get_mut(i)) {
+        if let Some(s) = out.pane_of(id).and_then(|i| out.panes.get_mut(i)) {
             s.active = id.to_owned();
         }
     }
@@ -1132,7 +1132,7 @@ pub fn from_legacy(v: &Value, pro: bool) -> DockLayout {
     let heights: BTreeMap<String, f32> = dock.and_then(|d| d.get("heights")).and_then(|h| serde_json::from_value(h.clone()).ok()).unwrap_or_default();
     let collapsed: Vec<String> = dock.and_then(|d| d.get("collapsed")).and_then(|c| serde_json::from_value(c.clone()).ok()).unwrap_or_default();
     let hidden: BTreeMap<String, Vec<String>> = dock.and_then(|d| d.get("hiddenTabs")).and_then(|h| serde_json::from_value(h.clone()).ok()).unwrap_or_default();
-    let mut out = DockLayout { sections: Vec::new(), rail: false, flyout: None };
+    let mut out = DockLayout { panes: Vec::new(), rail: false, flyout: None };
     for g in order.into_iter().filter(|g| shown(g)) {
         let all = group_tabs(g, pro);
         let gone = hidden.get(g);
@@ -1141,14 +1141,14 @@ pub fn from_legacy(v: &Value, pro: bool) -> DockLayout {
         if kept.is_empty() {
             continue;
         }
-        let mut s = Section::new(&kept);
+        let mut s = Pane::new(&kept);
         if let Some(front) = tabs.and_then(|t| t.get(g)).and_then(Value::as_u64).and_then(|k| all.get(usize::try_from(k).ok()?)).filter(|id| kept.contains(id))
         {
             s.active = (*front).to_owned();
         }
         s.height = heights.get(g).copied();
         s.collapsed = collapsed.iter().any(|c| c == g);
-        out.sections.push(s);
+        out.panes.push(s);
     }
     out.sanitize();
     out

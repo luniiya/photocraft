@@ -27,7 +27,7 @@ The toolbar's foreground and background colour chips follow the `Tokens::round_c
 - **Fonts:** Inter (UI) and JetBrains Mono (numbers), both OFL. Named families `medium` and `semibold` are available via `theme::medium()` and `theme::semibold()`.
 - **Photoshop layout grammar (Pro):**
   - Essentials dock order: Color | Swatches, then Properties | Adjustments, then Layers | Channels | Paths (Layers fills the remaining height).
-  - The dock is made of modules (`crates/ui-egui/src/modules/`, one file each). Any tab drags onto another section's strip or into a section of its own. Pro keeps Photoshop's tab strips and icon rail; the Studio themes draw sections as cards with ≡ ⌄ ✕, a header with » (fold to an icon rail whose icons open flyouts) and + (a searchable panel picker).
+  - The side panel (`DockLayout`) contains panes (`Pane`); each pane holds modules (`Module`, one file each in `crates/ui-egui/src/modules/`) as tabs, with one active module visible at a time. Any tab drags onto another pane's strip or into a pane of its own. Pro keeps Photoshop's tab strips and icon rail; the Studio themes draw panes as cards with ≡ ⌄ ✕, a header with » (fold to an icon rail whose icons open flyouts) and + (a searchable panel picker).
   - Options-bar labels end with a colon ("Size:").
   - Document tabs read "name @ 12.5% (RGB/8)".
   - Toolbar tool groups carry a corner triangle.

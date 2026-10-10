@@ -4,23 +4,23 @@
 //! finds the files and lists them in [`ALL`], so adding a panel is adding a file: the dock,
 //! the Window menu, the icon rail, the panel picker and saved layouts pick it up by its id.
 //!
-//! A module only describes itself and draws its body; where it sits (which section, which tab,
+//! A module only describes itself and draws its body; where it sits (which pane, which tab,
 //! how tall) is [`crate::dock::DockLayout`]'s business.
 
 use crate::PhotocraftApp;
 
 include!(concat!(env!("OUT_DIR"), "/modules.rs"));
 
-/// How tall a module's section wants to be (points, tab strip included).
+/// How tall a module's pane wants to be (points, tab strip included).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Size {
     /// Height until the user resizes it, when the column has room.
     pub default: f32,
-    /// What it gives way down to so the filling section keeps its preferred height.
+    /// What it gives way down to so the filling pane keeps its preferred height.
     pub compact: f32,
     /// The smallest height it can be dragged or squeezed to.
     pub min: f32,
-    /// The height it asks for when it is the section filling the column's rest.
+    /// The height it asks for when it is the pane filling the column's rest.
     pub fill: f32,
 }
 
@@ -40,15 +40,15 @@ pub struct Module {
     pub icon: &'static str,
     /// Menu items that show or hide it (Window › Layers is `window.panel.layers`).
     pub menu_ids: &'static [&'static str],
-    /// Modules it joins when reopened and none of its section is left (Channels joins Layers).
+    /// Modules it joins when reopened and none of its pane is left (Channels joins Layers).
     pub siblings: &'static [&'static str],
     pub size: Size,
-    /// The body lays out its own scrolling list and footer, so it gets the full section height
+    /// The body lays out its own scrolling list and footer, so it gets the full pane height
     /// instead of a scroll area (Layers, History).
     pub fills: bool,
     /// Draw the body.
     pub body: fn(&mut PhotocraftApp, &mut egui::Ui),
-    /// Extra items at the top of the section's panel menu (≡) while this module is the front tab.
+    /// Extra items at the top of the pane's panel menu (≡) while this module is the front tab.
     pub menu: Option<fn(&mut PhotocraftApp, &mut egui::Ui)>,
 }
 

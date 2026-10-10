@@ -312,10 +312,10 @@ pub fn checked(app: &PhotocraftApp, id: &str) -> Option<bool> {
     {
         return Some(o.arrange == k);
     }
-    // A dock module is ticked while it is its section's front tab.
+    // A dock module is ticked while it is its pane's front tab.
     if let Some(m) = crate::modules::by_menu_id(id) {
         let dock = &app.ui.dock;
-        return Some(dock.section_of(m.id).and_then(|i| dock.sections.get(i)).is_some_and(|s| s.front() == m.id));
+        return Some(dock.pane_of(m.id).and_then(|i| dock.panes.get(i)).is_some_and(|s| s.front() == m.id));
     }
     if let Some(c) = type_checked(app, id) {
         return Some(c);

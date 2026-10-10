@@ -132,7 +132,7 @@ fn arrange_layouts_floating_windows_and_matching() {
 #[test]
 fn window_panels_select_dock_tabs() {
     let (mut app, ctx) = app_with(1);
-    let dock = |app: &PhotocraftApp, id: &str| app.ui.dock.section_of(id).map(|i| app.ui.dock.sections[i].tabs.clone());
+    let dock = |app: &PhotocraftApp, id: &str| app.ui.dock.pane_of(id).map(|i| app.ui.dock.panes[i].tabs.clone());
     menu(&mut app, &ctx, "window.panel.info", json!({})).unwrap();
     assert!(app.ui.dock.is_front("info"));
     assert_eq!(dock(&app, "info").unwrap(), ["navigator", "histogram", "info"], "the whole group comes back");
@@ -149,7 +149,7 @@ fn window_panels_select_dock_tabs() {
     assert!(!app.ui.dock.visible("layers") && !app.ui.dock.visible("paths"));
     menu(&mut app, &ctx, "window.panel.layers", json!({})).unwrap();
     assert_eq!(dock(&app, "layers").unwrap(), ["layers", "channels", "paths"]);
-    assert_eq!(app.ui.dock.sections.last().map(|s| s.front()), Some("layers"), "Layers is back at the bottom");
+    assert_eq!(app.ui.dock.panes.last().map(|s| s.front()), Some("layers"), "Layers is back at the bottom");
     // Type › Panels only ever shows.
     menu(&mut app, &ctx, "type.panels.character", json!({})).unwrap();
     menu(&mut app, &ctx, "type.panels.character", json!({})).unwrap();

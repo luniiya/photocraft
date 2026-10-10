@@ -385,7 +385,7 @@ fn dispatch(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlRequest) 
                 let mask_target = bool_field(p, "maskTarget")?;
                 let vector_mask_target = bool_field(p, "vectorMaskTarget")?;
                 let selection_mode = uint_field(p, "selectionMode")?;
-                // Dock layout: `dock` (sections, or a pre-module layout), group flags in `panels`, `dockTabs`.
+                // Dock layout: `dock` (panes, or a pre-module layout), group flags in `panels`, `dockTabs`.
                 let dock = crate::dock::layout_from_control(app, p.get("panels"), p.get("dockTabs"), p.get("dock"))?;
                 // Which chip the Color panel edits.
                 let color_panel = whole_object(&app.ui.color_panel, p.get("colorPanel"), "colorPanel")?;
@@ -534,7 +534,7 @@ fn dispatch(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlRequest) 
                 if let Some(m) = selection_mode {
                     app.ui.selection_mode = m.min(3) as u8;
                 }
-                // Dock sections, tabs, heights and collapsed sections (see `dock::DockLayout`).
+                // Dock panes, tabs, heights and collapsed panes (see `dock::DockLayout`).
                 if let Some(d) = dock {
                     app.ui.dock = d;
                 }

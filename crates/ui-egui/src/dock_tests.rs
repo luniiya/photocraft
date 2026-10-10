@@ -1,4 +1,4 @@
-//! Dock layout tests (#88): sections of modules, heights, splitters, collapse, reorder, tab drag,
+//! Dock layout tests (#88): panes of modules, heights, splitters, collapse, reorder, tab drag,
 //! the Studio rail and picker, persistence and migration of pre-module layouts.
 
 use egui::{Modifiers, PointerButton, Pos2, Rect, vec2};
@@ -9,36 +9,36 @@ use super::*;
 use crate::theme::ThemeKind;
 
 fn fronts(l: &DockLayout) -> Vec<&str> {
-    l.sections.iter().map(Section::front).collect()
+    l.panes.iter().map(Pane::front).collect()
 }
 
 fn tabs(l: &DockLayout, id: &str) -> Vec<String> {
-    l.section_of(id).and_then(|i| l.sections.get(i)).map(|s| s.tabs.clone()).unwrap_or_default()
+    l.pane_of(id).and_then(|i| l.panes.get(i)).map(|s| s.tabs.clone()).unwrap_or_default()
 }
 
-fn sec<'a>(l: &'a DockLayout, id: &str) -> &'a Section {
-    &l.sections[l.section_of(id).unwrap()]
+fn sec<'a>(l: &'a DockLayout, id: &str) -> &'a Pane {
+    &l.panes[l.pane_of(id).unwrap()]
 }
 
-fn sec_mut<'a>(l: &'a mut DockLayout, id: &str) -> &'a mut Section {
-    let i = l.section_of(id).unwrap();
-    &mut l.sections[i]
+fn sec_mut<'a>(l: &'a mut DockLayout, id: &str) -> &'a mut Pane {
+    let i = l.pane_of(id).unwrap();
+    &mut l.panes[i]
 }
 
 #[test]
-fn last_expanded_section_fills_the_column() {
+fn last_expanded_pane_fills_the_column() {
     let l = DockLayout::default();
     let hs = l.heights_for(1200.0, 28.0);
-    assert_eq!(hs[0], l.sections[0].default_height());
-    assert_eq!(hs[1], l.sections[1].default_height());
+    assert_eq!(hs[0], l.panes[0].default_height());
+    assert_eq!(hs[1], l.panes[1].default_height());
     let total: f32 = hs.iter().sum::<f32>() + 2.0 * GAP;
     assert!((total - 1200.0).abs() < 1e-3, "{hs:?}");
-    // Collapsed sections shrink to the tab strip; the one above Layers keeps its height.
+    // Collapsed panes shrink to the tab strip; the one above Layers keeps its height.
     let mut l = DockLayout::default();
     l.set_collapsed(0, true);
     let hs = l.heights_for(1000.0, 28.0);
     assert_eq!(hs[0], 28.0);
-    assert_eq!(hs[1], l.sections[1].default_height());
+    assert_eq!(hs[1], l.panes[1].default_height());
     // Layers collapsed: Properties becomes the filler.
     l.set_collapsed(2, true);
     let hs = l.heights_for(800.0, 28.0);
@@ -47,24 +47,24 @@ fn last_expanded_section_fills_the_column() {
 }
 
 #[test]
-fn short_columns_squeeze_sections_down_to_their_minimum_and_never_go_negative() {
+fn short_columns_squeeze_panes_down_to_their_minimum_and_never_go_negative() {
     let l = DockLayout::default();
     let hs = l.heights_for(400.0, 28.0);
-    assert_eq!(hs[2], l.sections[2].min_height(), "Layers keeps its minimum: {hs:?}");
-    assert_eq!(hs[0], l.sections[0].compact_height(), "the section farthest from Layers gives way last");
-    assert!(hs[1] < l.sections[1].compact_height());
+    assert_eq!(hs[2], l.panes[2].min_height(), "Layers keeps its minimum: {hs:?}");
+    assert_eq!(hs[0], l.panes[0].compact_height(), "the pane farthest from Layers gives way last");
+    assert!(hs[1] < l.panes[1].compact_height());
     for avail in [0.0, -50.0, 1.0, f32::NAN, f32::INFINITY, 1e9] {
         for h in l.heights_for(avail, 28.0) {
             assert!(h.is_finite() && h >= 0.0, "{avail}: {h}");
         }
     }
-    assert!(DockLayout { sections: Vec::new(), ..Default::default() }.heights_for(500.0, 28.0).is_empty());
+    assert!(DockLayout { panes: Vec::new(), ..Default::default() }.heights_for(500.0, 28.0).is_empty());
 }
 
 #[test]
 fn bad_stored_values_are_sanitised() {
     let mut l: DockLayout = serde_json::from_value(json!({
-        "sections": [
+        "panes": [
             {"tabs": ["layers", "layers", "bogus"], "active": "nope", "height": -10.0},
             {"tabs": ["layers", "color"], "height": 1e12},
             {"tabs": []},
@@ -74,21 +74,21 @@ fn bad_stored_values_are_sanitised() {
     }))
     .unwrap();
     l.sanitize();
-    assert_eq!(l.sections.len(), 2);
-    assert_eq!(l.sections[0].tabs, ["layers"]);
-    assert_eq!(l.sections[0].active, "layers");
-    assert_eq!(l.sections[0].height, None);
-    assert_eq!(l.sections[1].tabs, ["color"], "a module appears once");
-    assert!(l.sections[1].height() <= MAX_HEIGHT);
+    assert_eq!(l.panes.len(), 2);
+    assert_eq!(l.panes[0].tabs, ["layers"]);
+    assert_eq!(l.panes[0].active, "layers");
+    assert_eq!(l.panes[0].height, None);
+    assert_eq!(l.panes[1].tabs, ["color"], "a module appears once");
+    assert!(l.panes[1].height() <= MAX_HEIGHT);
     for bad in [f32::NAN, -10.0, f32::INFINITY, 1e12] {
-        l.sections[1].height = Some(bad);
-        let h = l.sections[1].height();
-        assert!(h.is_finite() && h >= l.sections[1].min_height() && h <= MAX_HEIGHT, "{bad} -> {h}");
+        l.panes[1].height = Some(bad);
+        let h = l.panes[1].height();
+        assert!(h.is_finite() && h >= l.panes[1].min_height() && h <= MAX_HEIGHT, "{bad} -> {h}");
     }
-    let many = DockLayout { sections: (0..500).map(|_| Section::new(&["layers"])).collect(), ..Default::default() };
+    let many = DockLayout { panes: (0..500).map(|_| Pane::new(&["layers"])).collect(), ..Default::default() };
     let mut many = many;
     many.sanitize();
-    assert_eq!(many.sections.len(), 1);
+    assert_eq!(many.panes.len(), 1);
     // Old UI state without the field loads the default.
     let mut ui = serde_json::to_value(crate::state::UiState::default()).unwrap();
     ui.as_object_mut().unwrap().remove("dock");
@@ -97,28 +97,28 @@ fn bad_stored_values_are_sanitised() {
 }
 
 #[test]
-fn move_section_reorders() {
+fn move_pane_reorders() {
     let mut l = DockLayout::default();
-    l.move_section(2, Some(0));
+    l.move_pane(2, Some(0));
     assert_eq!(fronts(&l), ["layers", "color", "properties"]);
-    l.move_section(0, None);
+    l.move_pane(0, None);
     assert_eq!(fronts(&l), ["color", "properties", "layers"]);
-    l.move_section(0, Some(0));
+    l.move_pane(0, Some(0));
     assert_eq!(fronts(&l), ["color", "properties", "layers"]);
-    l.move_section(99, Some(0));
-    l.move_section(0, Some(99));
-    assert_eq!(l.sections.len(), 3);
+    l.move_pane(99, Some(0));
+    l.move_pane(0, Some(99));
+    assert_eq!(l.panes.len(), 3);
 }
 
 #[test]
-fn tabs_join_other_sections_or_get_their_own() {
+fn tabs_join_other_panes_or_get_their_own() {
     let mut l = DockLayout::default();
-    // Channels onto the Properties section: it joins as the front tab.
+    // Channels onto the Properties pane: it joins as the front tab.
     l.drop_tab("channels", Drop::Join(1));
     assert_eq!(tabs(&l, "properties"), ["properties", "adjustments", "channels"]);
     assert!(l.is_front("channels"));
     assert_eq!(tabs(&l, "layers"), ["layers", "paths"]);
-    // History isn't docked; Paths gets a section of its own at the top.
+    // History isn't docked; Paths gets a pane of its own at the top.
     l.drop_tab("paths", Drop::NewAt(0));
     assert_eq!(fronts(&l), ["paths", "color", "channels", "layers"]);
     // Dropping a lone tab where it already is changes nothing; neither does joining itself.
@@ -129,14 +129,14 @@ fn tabs_join_other_sections_or_get_their_own() {
     l.drop_tab("paths", Drop::Join(99));
     l.drop_tab("history", Drop::Join(0));
     assert_eq!(l, before);
-    // The last tab out empties its section, which goes.
+    // The last tab out empties its pane, which goes.
     l.drop_tab("paths", Drop::Join(3));
     assert_eq!(fronts(&l), ["color", "channels", "paths"]);
     assert_eq!(tabs(&l, "layers"), ["layers", "paths"]);
 }
 
 #[test]
-fn add_panel_puts_a_module_in_the_section_asked() {
+fn add_panel_puts_a_module_in_the_pane_asked() {
     let mut l = DockLayout::default();
     l.drop_tab_or_add("history", 0);
     assert_eq!(tabs(&l, "color"), ["color", "swatches", "gradients", "patterns", "history"]);
@@ -151,7 +151,7 @@ fn add_panel_puts_a_module_in_the_section_asked() {
 }
 
 #[test]
-fn show_brings_back_a_whole_group_in_its_place_and_hide_closes_a_section() {
+fn show_brings_back_a_whole_group_in_its_place_and_hide_closes_a_pane() {
     let mut l = DockLayout::essentials(true);
     l.show("info");
     assert_eq!(fronts(&l), ["color", "properties", "info", "layers"]);
@@ -160,8 +160,8 @@ fn show_brings_back_a_whole_group_in_its_place_and_hide_closes_a_section() {
     l.close("histogram");
     l.show("histogram");
     assert_eq!(tabs(&l, "info"), ["navigator", "info", "histogram"]);
-    // Collapsed sections expand when shown.
-    let i = l.section_of("layers").unwrap();
+    // Collapsed panes expand when shown.
+    let i = l.pane_of("layers").unwrap();
     l.set_collapsed(i, true);
     l.show("paths");
     assert!(!sec(&l, "paths").collapsed && l.is_front("paths"));
@@ -169,7 +169,7 @@ fn show_brings_back_a_whole_group_in_its_place_and_hide_closes_a_section() {
     assert!(!l.visible("layers") && !l.visible("channels"));
     // Layers comes back last, with its tabs.
     l.show("layers");
-    assert_eq!(l.sections.last().unwrap().tabs, ["layers", "channels", "paths"]);
+    assert_eq!(l.panes.last().unwrap().tabs, ["layers", "channels", "paths"]);
     assert!(!l.toggle("layers") && !l.visible("layers"));
     assert!(l.toggle("layers"));
 }
@@ -198,7 +198,7 @@ fn layouts_saved_before_modules_are_migrated() {
     });
     let l = from_legacy(&v, true);
     assert_eq!(fronts(&l), ["channels", "gradients", "history"]);
-    assert_eq!(l.sections[0].tabs, ["layers", "channels"]);
+    assert_eq!(l.panes[0].tabs, ["layers", "channels"]);
     assert_eq!(sec(&l, "gradients").height, Some(222.0));
     assert!(sec(&l, "history").collapsed);
     // Studio's Color group started with Swatches: index 2 is still Gradients.
@@ -232,7 +232,7 @@ fn ui_set_takes_new_and_legacy_dock_keys() {
     // A legacy `dock` keeps what is showing.
     set(&mut app, None, None, Some(json!({"order": ["layers"]}))).unwrap();
     assert_eq!(fronts(&app.ui.dock), ["paths", "properties", "history"]);
-    let new = json!({"sections": [{"tabs": ["info", "layers"], "active": "layers"}]});
+    let new = json!({"panes": [{"tabs": ["info", "layers"], "active": "layers"}]});
     set(&mut app, None, None, Some(new)).unwrap();
     assert_eq!(fronts(&app.ui.dock), ["layers"]);
     assert_eq!(layout_from_control(&app, Some(&json!({"toolbar": false})), None, None), Ok(None));
@@ -241,7 +241,7 @@ fn ui_set_takes_new_and_legacy_dock_keys() {
         (None, Some(json!({"layers": 9})), None),
         (None, Some(json!({"bogus": 0})), None),
         (None, Some(json!([0])), None),
-        (None, None, Some(json!({"sections": 4}))),
+        (None, None, Some(json!({"panes": 4}))),
         (None, None, Some(json!({"nope": 1}))),
         (None, None, Some(json!(7))),
     ] {
@@ -280,7 +280,7 @@ fn harness(app: PhotocraftApp, size: egui::Vec2, theme: ThemeKind) -> Harness<'s
     h
 }
 
-/// The rect of the section holding module `id`.
+/// The rect of the pane holding module `id`.
 fn rect_of(h: &Harness<'static, PhotocraftApp>, id: &str) -> Rect {
     module_rect(h.state(), &h.ctx, id).unwrap_or_else(|| panic!("{id} not drawn: {:?}", last_rects(&h.ctx)))
 }
@@ -290,8 +290,8 @@ fn tab_rect(h: &Harness<'static, PhotocraftApp>, id: &str) -> Rect {
 }
 
 fn strip_of(h: &Harness<'static, PhotocraftApp>, id: &str) -> StripRects {
-    let i = h.state().ui.dock.section_of(id).unwrap();
-    last_strips(&h.ctx).into_iter().find(|s| s.section == i).unwrap()
+    let i = h.state().ui.dock.pane_of(id).unwrap();
+    last_strips(&h.ctx).into_iter().find(|s| s.pane == i).unwrap()
 }
 
 fn drag(h: &mut Harness<'static, PhotocraftApp>, from: Pos2, to: Pos2) {
@@ -330,10 +330,10 @@ fn switching_layer_kinds_keeps_the_layers_panel_still() {
         assert!(with_adj.iter().any(|(g, _)| g == "layers"));
         h.state_mut().run("layer.select", json!({"layer": pixel.0})).unwrap();
         h.run_steps(4);
-        assert_eq!(rects(&h), with_adj, "{theme:?}: selecting a pixel layer moved the dock sections");
+        assert_eq!(rects(&h), with_adj, "{theme:?}: selecting a pixel layer moved the dock panes");
         h.state_mut().run("layer.select", json!({"layer": adj.0})).unwrap();
         h.run_steps(4);
-        assert_eq!(rects(&h), with_adj, "{theme:?}: selecting an adjustment layer moved the dock sections");
+        assert_eq!(rects(&h), with_adj, "{theme:?}: selecting an adjustment layer moved the dock panes");
         // Properties ↔ Adjustments tabs don't move anything either.
         sec_mut(&mut h.state_mut().ui.dock, "properties").active = "adjustments".into();
         h.run_steps(3);
@@ -354,7 +354,7 @@ fn dragging_the_splitter_resizes_and_survives_a_ui_state_round_trip() {
     let layers2 = rect_of(&h, "layers");
     assert!((props2.height() - (props.height() - 60.0)).abs() < 2.0, "{props:?} -> {props2:?}");
     assert!((layers2.top() - (layers.top() - 60.0)).abs() < 2.0, "{layers:?} -> {layers2:?}");
-    assert_eq!(rect_of(&h, "color"), color, "the section above keeps its place");
+    assert_eq!(rect_of(&h, "color"), color, "the pane above keeps its place");
     assert_eq!(layers2.bottom(), layers.bottom());
     let stored = sec(&h.state().ui.dock, "properties").height.unwrap();
     // Dragging past the minimum stops at it.
@@ -410,7 +410,7 @@ fn reset_workspace_restores_the_default_layout_and_new_workspaces_keep_theirs() 
 }
 
 #[test]
-fn a_single_tab_click_expands_a_collapsed_section() {
+fn a_single_tab_click_expands_a_collapsed_pane() {
     for theme in [ThemeKind::ProMedium, ThemeKind::Studio] {
         for tab in ["swatches", "color"] {
             let (mut app, _, _) = app_with_layers();
@@ -421,7 +421,7 @@ fn a_single_tab_click_expands_a_collapsed_section() {
             let collapsed_height = rect_of(&h, "color").height();
             let p = tab_rect(&h, tab).center();
             click(&mut h, p, PointerButton::Primary);
-            assert!(!h.state().ui.dock.sections[0].collapsed, "{theme:?}: tab {tab}");
+            assert!(!h.state().ui.dock.panes[0].collapsed, "{theme:?}: tab {tab}");
             assert!(h.state().ui.dock.is_front(tab), "{theme:?}: tab {tab}");
             assert!(rect_of(&h, "color").height() > collapsed_height);
         }
@@ -442,7 +442,7 @@ fn double_clicking_a_tab_collapses_and_dragging_a_strip_reorders() {
         h.step();
     }
     h.run_steps(2);
-    assert!(h.state().ui.dock.sections[0].collapsed);
+    assert!(h.state().ui.dock.panes[0].collapsed);
     assert!(rect_of(&h, "color").height() < 40.0);
     h.state_mut().ui.dock.set_collapsed(0, false);
     h.run_steps(3);
@@ -459,10 +459,10 @@ fn double_clicking_a_tab_collapses_and_dragging_a_strip_reorders() {
     assert_eq!(fronts(&h.state().ui.dock).first(), Some(&"layers"));
 }
 
-/// Tabs drag between sections in both themes: onto a strip to join it, below the last section
+/// Tabs drag between panes in both themes: onto a strip to join it, below the last pane
 /// for one of their own. A locked workspace keeps them.
 #[test]
-fn dragging_a_tab_moves_it_between_sections() {
+fn dragging_a_tab_moves_it_between_panes() {
     for theme in [ThemeKind::ProMedium, ThemeKind::Studio] {
         let (app, _, _) = app_with_layers();
         let mut h = harness(app, vec2(1200.0, 900.0), theme);
@@ -472,11 +472,11 @@ fn dragging_a_tab_moves_it_between_sections() {
         let dock = &h.state().ui.dock;
         assert_eq!(tabs(dock, "properties"), ["properties", "adjustments", "channels"], "{theme:?}");
         assert!(dock.is_front("channels"), "{theme:?}");
-        // To the very bottom: a section of its own below Layers.
+        // To the very bottom: a pane of its own below Layers.
         let layers = rect_of(&h, "layers");
         let from = tab_rect(&h, "gradients").center();
         drag(&mut h, from, Pos2::new(layers.center().x, layers.bottom() - 4.0));
-        assert_eq!(h.state().ui.dock.sections.last().unwrap().tabs, ["gradients"], "{theme:?}: {:?}", h.state().ui.dock);
+        assert_eq!(h.state().ui.dock.panes.last().unwrap().tabs, ["gradients"], "{theme:?}: {:?}", h.state().ui.dock);
         h.state_mut().session.prefs.edit(|p| p.workspace_locked = true);
         let before = h.state().ui.dock.clone();
         let (from, to) = (tab_rect(&h, "paths").center(), rect_of(&h, "color").center());
@@ -515,7 +515,7 @@ fn the_rail_and_window_menu_never_lose_a_panel() {
     let (mut app, _, _) = app_with_layers();
     let ctx = egui::Context::default();
     let collapsed = |app: &PhotocraftApp, id: &str| sec(&app.ui.dock, id).collapsed;
-    // The rail collapses and expands a docked section; it never hides it (#129).
+    // The rail collapses and expands a docked pane; it never hides it (#129).
     rail_click(&mut app, "layers");
     assert!(app.ui.dock.visible("layers") && collapsed(&app, "layers"));
     rail_click(&mut app, "layers");
@@ -523,8 +523,8 @@ fn the_rail_and_window_menu_never_lose_a_panel() {
     // …and shows a hidden one.
     rail_click(&mut app, "history");
     assert!(app.ui.dock.is_front("history") && !collapsed(&app, "history"));
-    // Window › Layers on a collapsed section expands it instead of hiding it.
-    let i = app.ui.dock.section_of("layers").unwrap();
+    // Window › Layers on a collapsed pane expands it instead of hiding it.
+    let i = app.ui.dock.pane_of("layers").unwrap();
     app.ui.dock.set_collapsed(i, true);
     crate::menus::invoke(&mut app, &ctx, "window.panel.layers", json!({})).unwrap();
     assert!(app.ui.dock.is_front("layers") && !collapsed(&app, "layers"));
@@ -593,7 +593,7 @@ fn clicking_around_the_ui_keeps_the_panels_put() {
         let app = h.state();
         assert_eq!(app.ui.dock, dock, "click at {p:?} changed the dock");
         if app.ui.dialogs.is_empty() && app.ui.shell.dialog.is_none() {
-            assert_eq!(last_rects(&h.ctx), rects, "click at {p:?} moved the dock sections");
+            assert_eq!(last_rects(&h.ctx), rects, "click at {p:?} moved the dock panes");
         }
         h.state_mut().ui.dialogs.clear();
     }
@@ -609,22 +609,22 @@ fn right_click_tab(h: &mut Harness<'static, PhotocraftApp>, id: &str) {
 }
 
 /// #1753: both themes offer Close for the clicked tab and Close Tab Group. Closing the last tab
-/// takes its section away; the Window menu brings a module back with its group.
+/// takes its pane away; the Window menu brings a module back with its group.
 #[test]
-fn panel_tab_context_menu_closes_one_tab_or_its_section() {
+fn panel_tab_context_menu_closes_one_tab_or_its_pane() {
     use egui_kittest::kittest::Queryable;
 
     for theme in [ThemeKind::ProMedium, ThemeKind::Studio] {
         let (app, _, _) = app_with_layers();
         let mut h = harness(app, vec2(1300.0, 850.0), theme);
-        // Close the first tab: the section stays, showing the next one.
+        // Close the first tab: the pane stays, showing the next one.
         right_click_tab(&mut h, "properties");
         h.get_by_label("Close").click();
         h.run_steps(3);
         assert!(!h.state().ui.dock.visible("properties"), "{theme:?}");
-        assert!(h.state().ui.dock.is_front("adjustments"), "{theme:?}: closing one tab keeps the section");
+        assert!(h.state().ui.dock.is_front("adjustments"), "{theme:?}: closing one tab keeps the pane");
         assert_eq!(strip_of(&h, "adjustments").tabs.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), ["adjustments"]);
-        // Close the last one: its section goes, the others stay.
+        // Close the last one: its pane goes, the others stay.
         right_click_tab(&mut h, "adjustments");
         h.get_by_label("Close").click();
         h.run_steps(3);
@@ -634,7 +634,7 @@ fn panel_tab_context_menu_closes_one_tab_or_its_section() {
         crate::menus::invoke(h.state_mut(), &ctx, "window.panel.properties", json!({})).unwrap();
         h.run_steps(3);
         assert_eq!(fronts(&h.state().ui.dock), ["color", "properties", "layers"], "{theme:?}");
-        // Close Tab Group takes the whole section.
+        // Close Tab Group takes the whole pane.
         right_click_tab(&mut h, "properties");
         h.get_by_label("Close Tab Group").click();
         h.run_steps(3);
@@ -642,9 +642,9 @@ fn panel_tab_context_menu_closes_one_tab_or_its_section() {
     }
 }
 
-/// Studio's card header: ⌄ collapses the section, ✕ closes it.
+/// Studio's card header: ⌄ collapses the pane, ✕ closes it.
 #[test]
-fn studio_section_buttons_collapse_and_close() {
+fn studio_pane_buttons_collapse_and_close() {
     let (app, _, _) = app_with_layers();
     let mut h = harness(app, vec2(1300.0, 850.0), ThemeKind::Studio);
     let s = strip_of(&h, "properties");
@@ -753,25 +753,25 @@ fn defaults_give_way_to_layers_but_user_sizes_stay() {
     let l = DockLayout::default();
     // A tall column: everyone at their defaults, Layers takes the rest.
     let hs = l.heights_for(1200.0, 28.0);
-    assert_eq!(hs[0], l.sections[0].default_height());
-    assert_eq!(hs[1], l.sections[1].default_height());
-    // A short one: default-sized sections shrink toward their compact heights so Layers keeps
+    assert_eq!(hs[0], l.panes[0].default_height());
+    assert_eq!(hs[1], l.panes[1].default_height());
+    // A short one: default-sized panes shrink toward their compact heights so Layers keeps
     // its preferred height, the one nearest Layers first.
     let hs = l.heights_for(820.0, 28.0);
-    assert!(hs[2] >= l.sections[2].preferred_fill() - 0.5, "{hs:?}");
-    assert!(hs[1] < l.sections[1].default_height() && hs[1] >= l.sections[1].compact_height(), "{hs:?}");
+    assert!(hs[2] >= l.panes[2].preferred_fill() - 0.5, "{hs:?}");
+    assert!(hs[1] < l.panes[1].default_height() && hs[1] >= l.panes[1].compact_height(), "{hs:?}");
     // Heights the user dragged to (saved in prefs) are kept as they are.
     let mut mine = DockLayout::default();
-    mine.sections[1].height = Some(340.0);
-    mine.sections[0].height = Some(200.0);
+    mine.panes[1].height = Some(340.0);
+    mine.panes[0].height = Some(200.0);
     let hs = mine.heights_for(800.0, 28.0);
     assert_eq!((hs[0], hs[1]), (200.0, 340.0), "{hs:?}");
 }
 
-/// #150: Window › Character opens a Character | Paragraph section next to Properties (which
+/// #150: Window › Character opens a Character | Paragraph pane next to Properties (which
 /// stays), and toggles closed again.
 #[test]
-fn window_character_opens_its_own_section_and_keeps_properties() {
+fn window_character_opens_its_own_pane_and_keeps_properties() {
     for theme in [ThemeKind::ProMedium, ThemeKind::Studio] {
         let (app, _, _) = app_with_layers();
         let mut h = harness(app, vec2(1440.0, 900.0), theme);
@@ -785,7 +785,7 @@ fn window_character_opens_its_own_section_and_keeps_properties() {
         assert!(props.height() > 60.0 && props.bottom() <= ch.top(), "{theme:?}: Properties visible above Character");
         assert!(rect_of(&h, "layers").top() > ch.bottom(), "{theme:?}: Layers stays the filler at the bottom");
         assert_eq!(crate::view_cmds::checked(h.state(), "window.panel.character"), Some(true));
-        // Paragraph is the section's second tab; choosing it again on its tab closes the section.
+        // Paragraph is the pane's second tab; choosing it again on its tab closes the pane.
         crate::menus::invoke(h.state_mut(), &ctx, "window.panel.paragraph", json!({})).unwrap();
         assert!(h.state().ui.dock.is_front("paragraph"));
         crate::menus::invoke(h.state_mut(), &ctx, "window.panel.paragraph", json!({})).unwrap();
@@ -884,7 +884,7 @@ fn dock_strips_fit_and_the_chevron_menu_switches_tabs() {
         assert!(strips.len() >= 5, "{theme:?}: {strips:?}");
         for s in &strips {
             for (id, r) in &s.tabs {
-                assert!(r.intersect(s.menu).width() <= 0.5, "{theme:?} section {}: tab {id} under the menu", s.section);
+                assert!(r.intersect(s.menu).width() <= 0.5, "{theme:?} pane {}: tab {id} under the menu", s.pane);
             }
         }
     }
@@ -953,7 +953,7 @@ fn only_pro_keeps_a_grey_tab_close() {
 }
 
 /// Like a browser: hovering a tab shows its ×, which sits beside the label, never on it; a
-/// middle click closes the tab too; the round + after the last tab adds a module to that section.
+/// middle click closes the tab too; the round + after the last tab adds a module to that pane.
 #[test]
 fn tabs_close_on_hover_or_middle_click_and_the_strip_plus_adds_a_tab() {
     use egui_kittest::kittest::Queryable;
@@ -981,7 +981,7 @@ fn tabs_close_on_hover_or_middle_click_and_the_strip_plus_adds_a_tab() {
         let tab = tab_rect(&h, "layers");
         click(&mut h, tab.center(), PointerButton::Middle);
         assert!(!h.state().ui.dock.visible("layers"), "{theme:?}: a middle click closes the tab");
-        // The strip's +: it adds into its own section.
+        // The strip's +: it adds into its own pane.
         let strip = strip_of(&h, "color");
         let band = Rect::from_x_y_ranges(strip.menu.left() - 2000.0..=strip.menu.right() + 50.0, strip.menu.y_range());
         let plus =
@@ -995,7 +995,7 @@ fn tabs_close_on_hover_or_middle_click_and_the_strip_plus_adds_a_tab() {
         let row = h.query_all_by_label("History").find(|n| n.rect().width() > n.rect().height() + 4.0).expect("History in the picker");
         row.click();
         h.run_steps(3);
-        assert!(tabs(&h.state().ui.dock, "color").iter().any(|t| t == "history"), "{theme:?}: {:?}", h.state().ui.dock.sections);
+        assert!(tabs(&h.state().ui.dock, "color").iter().any(|t| t == "history"), "{theme:?}: {:?}", h.state().ui.dock.panes);
     }
 }
 
@@ -1020,7 +1020,7 @@ fn studio_rail_icons_have_a_context_menu() {
     h.get_by_label("Close Tab Group").click();
     h.run_steps(3);
     assert!(!h.state().ui.dock.visible("properties") && !h.state().ui.dock.visible("adjustments"));
-    let front = h.state().ui.dock.sections[0].front().to_owned();
+    let front = h.state().ui.dock.panes[0].front().to_owned();
     let label = crate::modules::title(&front).to_owned();
     let p = icon(&h, &label);
     click(&mut h, p, PointerButton::Middle);
@@ -1052,4 +1052,22 @@ fn the_pro_rail_plus_adds_a_panel() {
     h.query_all_by_label("History").find(|n| n.rect().width() > n.rect().height() + 4.0).expect("History in the picker").click();
     h.run_steps(3);
     assert!(h.state().ui.dock.is_front("history"));
+}
+
+/// The pane terminology keeps layouts from the original panel PR loadable.
+#[test]
+fn section_layouts_still_load_as_panes() {
+    let old = json!({"sections": [{"tabs": ["history", "actions"], "active": "actions", "height": 240.0, "collapsed": true}], "rail": true});
+    let layout: DockLayout = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(layout.panes.len(), 1);
+    assert_eq!(layout.panes[0].front(), "actions");
+    assert_eq!(layout.panes[0].height, Some(240.0));
+    assert!(layout.panes[0].collapsed && layout.rail);
+    let saved = serde_json::to_value(&layout).unwrap();
+    assert!(saved.get("panes").is_some() && saved.get("sections").is_none());
+    assert_eq!(serde_json::from_value::<DockLayout>(saved).unwrap(), layout);
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    apply(&mut app, &json!({"dock": old}));
+    assert_eq!(app.ui.dock, layout);
+    assert_eq!(layout_from_control(&app, None, None, Some(&old)).unwrap(), Some(layout));
 }

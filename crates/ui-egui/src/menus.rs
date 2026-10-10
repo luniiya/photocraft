@@ -513,7 +513,7 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
                 let pro = crate::dock::is_pro(app);
                 let dock = &mut app.ui.dock;
                 let collapsed =
-                    crate::dock::group_tabs(key, pro).iter().filter_map(|m| dock.section_of(m)).any(|i| dock.sections.get(i).is_some_and(|s| s.collapsed));
+                    crate::dock::group_tabs(key, pro).iter().filter_map(|m| dock.pane_of(m)).any(|i| dock.panes.get(i).is_some_and(|s| s.collapsed));
                 if dock.group_shown(key) && !collapsed {
                     dock.hide_group(key);
                 } else {
@@ -1263,7 +1263,7 @@ pub fn apply_workspace(app: &mut PhotocraftApp) {
     if crate::workspace_ui::apply_custom(app) {
         return;
     }
-    // Presets use the default section order, heights and tabs (Reset brings everything back).
+    // Presets use the default pane order, heights and tabs (Reset brings everything back).
     let groups: &[&str] = match app.ui.workspace.as_str() {
         "Photography" => &["properties", "navigator", "history", "layers"],
         "Painting" => &["color", "layers"],
