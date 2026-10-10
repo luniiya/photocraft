@@ -1966,8 +1966,8 @@
 	Fade steps	Pasos de desvanecimiento
 	Hide the layer's effects  ({key}-click: all layers)	Ocultar los efectos de la capa  ({key}-clic: todas las capas)
 	Import Brushes… (.abr)	Importar pinceles… (.abr)
-	Move Group Down	Mover grupo abajo
-	Move Group Up	Mover grupo arriba
+	Move Panel Group Down	Mover grupo de paneles abajo
+	Move Panel Group Up	Mover grupo de paneles arriba
 	Reset the brush to the defaults	Restablecer el pincel a los valores predeterminados
 	Restore original size	Restaurar el tamaño original
 	Roundness:	Redondez:

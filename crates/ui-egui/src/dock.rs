@@ -117,8 +117,9 @@ const MAX_HEIGHT: f32 = 4000.0;
 /// Most panes a layout keeps (guards against absurd `ui.set` input).
 const MAX_PANES: usize = 64;
 
-/// The fixed groups of layouts saved before modules, and of the workspace presets, in Photoshop's
-/// Essentials order. Pro puts Color before Swatches, like Photoshop; Studio leads with Swatches.
+/// The preset groups: the fixed groups of layouts saved before modules and of the workspace
+/// presets, in Photoshop's Essentials order. Pro puts Color before Swatches, like Photoshop;
+/// Studio leads with Swatches.
 pub const GROUPS: [&str; 6] = ["color", "properties", "character", "navigator", "history", "layers"];
 
 /// A preset group's modules, in tab order.
@@ -155,9 +156,9 @@ impl DockLayout {
         Self::preset(&["color", "properties", "layers"], pro)
     }
 
-    /// Switching between Pro and Studio: an untouched Color group takes the theme's tab order
-    /// (Photoshop leads with Color, Studio with Swatches), keeping the front tab the order's
-    /// first when it was.
+    /// Switching between Pro and Studio: an untouched Color preset group takes the theme's tab
+    /// order (Photoshop leads with Color, Studio with Swatches), keeping the front tab the
+    /// order's first when it was.
     pub fn follow_theme(&mut self, pro: bool) {
         let (from, to) = (group_tabs("color", !pro), group_tabs("color", pro));
         for s in &mut self.panes {
@@ -247,8 +248,8 @@ impl DockLayout {
         }
     }
 
-    /// Hide the pane holding module `id` (Window › <panel> on a showing panel hides its group,
-    /// like Photoshop).
+    /// Hide the pane holding module `id` (Window › <panel> on a showing panel hides its panel
+    /// group, like Photoshop).
     pub fn hide(&mut self, id: &str) {
         if let Some(i) = self.pane_of(id) {
             self.panes.remove(i);
@@ -391,9 +392,9 @@ impl DockLayout {
     /// pane gives way down to its minimum height.
     pub fn heights_for(&self, avail: f32, strip: f32) -> Vec<f32> {
         let avail = if avail.is_finite() { avail.max(0.0) } else { 0.0 };
-        let secs = &self.panes;
-        let filler = secs.iter().rposition(|s| !s.collapsed);
-        let mut hs: Vec<f32> = secs
+        let panes = &self.panes;
+        let filler = panes.iter().rposition(|s| !s.collapsed);
+        let mut hs: Vec<f32> = panes
             .iter()
             .enumerate()
             .map(|(i, s)| {
@@ -407,16 +408,16 @@ impl DockLayout {
             })
             .collect();
         if let Some(f) = filler {
-            let gaps = GAP * secs.len().saturating_sub(1) as f32;
-            let min_fill = secs.get(f).map_or(0.0, Pane::min_height);
-            let pref_fill = secs.get(f).map_or(0.0, Pane::preferred_fill);
+            let gaps = GAP * panes.len().saturating_sub(1) as f32;
+            let min_fill = panes.get(f).map_or(0.0, Pane::min_height);
+            let pref_fill = panes.get(f).map_or(0.0, Pane::preferred_fill);
             let used: f32 = hs.iter().sum::<f32>() + gaps;
             let mut deficit = (used + pref_fill - avail).max(0.0);
             for i in (0..f).rev() {
                 if deficit <= 0.0 {
                     break;
                 }
-                let Some(s) = secs.get(i) else { continue };
+                let Some(s) = panes.get(i) else { continue };
                 if s.collapsed || s.height.is_some() {
                     continue;
                 }
@@ -433,7 +434,7 @@ impl DockLayout {
                 if deficit <= 0.0 {
                     break;
                 }
-                let Some(s) = secs.get(i) else { continue };
+                let Some(s) = panes.get(i) else { continue };
                 if s.collapsed {
                     continue;
                 }
@@ -610,22 +611,22 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let mut strips: Vec<StripRects> = Vec::with_capacity(rects.len());
     let panes = app.ui.dock.panes.clone();
     let count = panes.len();
-    for (i, (sec, rect)) in panes.iter().zip(rects.iter().copied()).enumerate() {
-        let collapsed = sec.collapsed;
-        let mut child = ui.new_child(egui::UiBuilder::new().id_salt(("dock-pane", sec.key())).max_rect(rect));
+    for (i, (pane, rect)) in panes.iter().zip(rects.iter().copied()).enumerate() {
+        let collapsed = pane.collapsed;
+        let mut child = ui.new_child(egui::UiBuilder::new().id_salt(("dock-pane", pane.key())).max_rect(rect));
         child.set_clip_rect(rect.intersect(ui.clip_rect()));
         child.spacing_mut().item_spacing.y = if t.pro { 0.0 } else { 6.0 };
-        let mods: Vec<&'static Module> = sec.tabs.iter().filter_map(|id| modules::get(id)).collect();
+        let mods: Vec<&'static Module> = pane.tabs.iter().filter_map(|id| modules::get(id)).collect();
         if mods.is_empty() {
             continue;
         }
         let titles: Vec<&str> = mods.iter().map(|m| m.title).collect();
-        let front = sec.front().to_owned();
+        let front = pane.front().to_owned();
         let mut sel = mods.iter().position(|m| m.id == front).unwrap_or(0);
         let before = sel;
-        let resp = widgets::dock_card(&mut child, sec.key(), &titles, &mut sel, collapsed, |ui, shown| {
+        let resp = widgets::dock_card(&mut child, pane.key(), &titles, &mut sel, collapsed, |ui, shown| {
             if let Some(m) = mods.get(shown) {
-                module_body(app, ui, m, sec.key());
+                module_body(app, ui, m, pane.key());
             }
         });
         strips.push(StripRects {
@@ -692,11 +693,11 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 actions.push(Action::ToggleCollapse(i));
                 ui.close();
             }
-            if ui.add_enabled(!locked && i > 0, egui::Button::new(tl!("Move Group Up"))).clicked() {
+            if ui.add_enabled(!locked && i > 0, egui::Button::new(tl!("Move Panel Group Up"))).clicked() {
                 actions.push(Action::MovePane(i, Some(i.saturating_sub(1))));
                 ui.close();
             }
-            if ui.add_enabled(!locked && i + 1 < count, egui::Button::new(tl!("Move Group Down"))).clicked() {
+            if ui.add_enabled(!locked && i + 1 < count, egui::Button::new(tl!("Move Panel Group Down"))).clicked() {
                 actions.push(Action::MovePane(i, if i + 2 < count { Some(i + 2) } else { None }));
                 ui.close();
             }
@@ -939,7 +940,7 @@ pub fn studio_rail(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     app.ui.dock.flyout = Some(m.id.to_owned());
                     ui.close();
                 }
-                if ui.button(tl!("Close Tab")).clicked() {
+                if ui.button(tl!("Close")).clicked() {
                     app.ui.dock.close(m.id);
                     ui.close();
                 }
@@ -1132,12 +1133,12 @@ pub fn layout_from_control(app: &PhotocraftApp, panels: Option<&Value>, dock_tab
     Ok(Some(out))
 }
 
-/// `panels` (from a layout saved before modules) carries per-group visibility flags.
+/// `panels` (from a layout saved before modules) carries per-preset-group visibility flags.
 fn has_legacy_flags(panels: &Value) -> bool {
     GROUPS.iter().any(|g| panels.get(g).is_some_and(Value::is_boolean))
 }
 
-/// The pre-module default visibility of each group.
+/// The pre-module default visibility of each preset group.
 fn legacy_default(group: &str) -> bool {
     matches!(group, "color" | "properties" | "layers")
 }

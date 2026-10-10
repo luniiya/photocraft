@@ -1964,8 +1964,8 @@
 	Fade steps	Passi dissolvenza
 	Hide the layer's effects  ({key}-click: all layers)	Nascondi effetti livello ({key}-click: tutti i livelli)
 	Import Brushes… (.abr)	Importa pennelli… (.abr)
-	Move Group Down	Sposta gruppo giù
-	Move Group Up	Sposta gruppo su
+	Move Panel Group Down	Sposta gruppo pannelli giù
+	Move Panel Group Up	Sposta gruppo pannelli su
 	Reset the brush to the defaults	Reimposta pennello ai predefiniti
 	Restore original size	Ripristina dimensione originale
 	Roundness:	Rotondità:

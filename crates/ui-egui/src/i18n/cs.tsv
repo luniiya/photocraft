@@ -1982,8 +1982,8 @@
 	Fade steps	Kroky zeslabení
 	Hide the layer's effects  ({key}-click: all layers)	Skrýt efekty vrstvy  ({key}+kliknutí: všechny vrstvy)
 	Import Brushes… (.abr)	Importovat štětce… (.abr)
-	Move Group Down	Posunout skupinu dolů
-	Move Group Up	Posunout skupinu nahoru
+	Move Panel Group Down	Posunout skupinu panelů dolů
+	Move Panel Group Up	Posunout skupinu panelů nahoru
 	Reset the brush to the defaults	Obnovit výchozí nastavení štětce
 	Restore original size	Obnovit původní velikost
 	Roundness:	Kulatost:

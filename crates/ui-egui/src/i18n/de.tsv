@@ -1956,8 +1956,8 @@
 	Fade steps	Verblassen-Schritte
 	Hide the layer's effects  ({key}-click: all layers)	Effekte der Ebene ausblenden  ({key}-Klick: alle Ebenen)
 	Import Brushes… (.abr)	Pinsel importieren… (.abr)
-	Move Group Down	Gruppe nach unten
-	Move Group Up	Gruppe nach oben
+	Move Panel Group Down	Bedienfeldgruppe nach unten
+	Move Panel Group Up	Bedienfeldgruppe nach oben
 	Reset the brush to the defaults	Pinsel auf Standardwerte zurücksetzen
 	Restore original size	Originalgröße wiederherstellen
 	Roundness:	Rundung:

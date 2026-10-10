@@ -1973,8 +1973,8 @@
 	Fade steps	渐隐步数
 	Hide the layer's effects  (⌥-click: all layers)	隐藏图层效果  (⌥-单击：所有图层)
 	Import Brushes… (.abr)	导入画笔… (.abr)
-	Move Group Down	向下移动组
-	Move Group Up	向上移动组
+	Move Panel Group Down	向下移动面板组
+	Move Panel Group Up	向上移动面板组
 	Reset the brush to the defaults	将画笔重置为默认值
 	Restore original size	还原原始大小
 	Roundness:	圆度：

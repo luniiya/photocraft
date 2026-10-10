@@ -1930,8 +1930,8 @@
 	Fade steps	약화 단계
 	Hide the layer's effects  ({key}-click: all layers)	레이어 효과 숨기기  ({key} 키를 누른 채 클릭: 모든 레이어)
 	Import Brushes… (.abr)	브러시 가져오기… (.abr)
-	Move Group Down	그룹 아래로 이동
-	Move Group Up	그룹 위로 이동
+	Move Panel Group Down	패널 그룹 아래로 이동
+	Move Panel Group Up	패널 그룹 위로 이동
 	Reset the brush to the defaults	브러시를 기본값으로 초기화
 	Restore original size	원래 크기 복원
 	Roundness:	원형률:

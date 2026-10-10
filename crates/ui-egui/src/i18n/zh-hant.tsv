@@ -1966,8 +1966,8 @@
 	Fade steps	淡出步數
 	Hide the layer's effects  ({key}-click: all layers)	隱藏圖層效果 ({key}+按一下：所有圖層)
 	Import Brushes… (.abr)	匯入筆刷… (.abr)
-	Move Group Down	下移群組
-	Move Group Up	上移群組
+	Move Panel Group Down	下移面板群組
+	Move Panel Group Up	上移面板群組
 	Reset the brush to the defaults	將筆刷重設為預設值
 	Restore original size	還原原始大小
 	Roundness:	圓度：

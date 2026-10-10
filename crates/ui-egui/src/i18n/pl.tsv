@@ -1961,8 +1961,8 @@
 	Fade steps	Kroki zanikania
 	Hide the layer's effects  ({key}-click: all layers)	Ukryj efekty warstwy  (kliknięcie z {key}: wszystkie warstwy)
 	Import Brushes… (.abr)	Importuj pędzle… (.abr)
-	Move Group Down	Przesuń grupę w dół
-	Move Group Up	Przesuń grupę w górę
+	Move Panel Group Down	Przesuń grupę paneli w dół
+	Move Panel Group Up	Przesuń grupę paneli w górę
 	Reset the brush to the defaults	Przywróć domyślne ustawienia pędzla
 	Restore original size	Przywróć oryginalny rozmiar
 	Roundness:	Zaokrąglenie:

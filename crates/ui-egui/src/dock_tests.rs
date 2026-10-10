@@ -16,11 +16,11 @@ fn tabs(l: &DockLayout, id: &str) -> Vec<String> {
     l.pane_of(id).and_then(|i| l.panes.get(i)).map(|s| s.tabs.clone()).unwrap_or_default()
 }
 
-fn sec<'a>(l: &'a DockLayout, id: &str) -> &'a Pane {
+fn pane<'a>(l: &'a DockLayout, id: &str) -> &'a Pane {
     &l.panes[l.pane_of(id).unwrap()]
 }
 
-fn sec_mut<'a>(l: &'a mut DockLayout, id: &str) -> &'a mut Pane {
+fn pane_mut<'a>(l: &'a mut DockLayout, id: &str) -> &'a mut Pane {
     let i = l.pane_of(id).unwrap();
     &mut l.panes[i]
 }
@@ -185,7 +185,7 @@ fn show_brings_back_a_whole_group_in_its_place_and_hide_closes_a_pane() {
     let i = l.pane_of("layers").unwrap();
     l.set_collapsed(i, true);
     l.show("paths");
-    assert!(!sec(&l, "paths").collapsed && l.is_front("paths"));
+    assert!(!pane(&l, "paths").collapsed && l.is_front("paths"));
     l.hide("paths");
     assert!(!l.visible("layers") && !l.visible("channels"));
     // Layers comes back last, with its tabs.
@@ -220,8 +220,8 @@ fn layouts_saved_before_modules_are_migrated() {
     let l = from_legacy(&v, true);
     assert_eq!(fronts(&l), ["channels", "gradients", "history"]);
     assert_eq!(l.panes[0].tabs, ["layers", "channels"]);
-    assert_eq!(sec(&l, "gradients").height, Some(222.0));
-    assert!(sec(&l, "history").collapsed);
+    assert_eq!(pane(&l, "gradients").height, Some(222.0));
+    assert!(pane(&l, "history").collapsed);
     // Studio's Color group started with Swatches: index 2 is still Gradients.
     assert!(from_legacy(&v, false).is_front("gradients"));
     // Nothing saved: the pre-module default (Color, Properties, Layers).
@@ -356,7 +356,7 @@ fn switching_layer_kinds_keeps_the_layers_panel_still() {
         h.run_steps(4);
         assert_eq!(rects(&h), with_adj, "{theme:?}: selecting an adjustment layer moved the dock panes");
         // Properties ↔ Adjustments tabs don't move anything either.
-        sec_mut(&mut h.state_mut().ui.dock, "properties").active = "adjustments".into();
+        pane_mut(&mut h.state_mut().ui.dock, "properties").active = "adjustments".into();
         h.run_steps(3);
         assert_eq!(rects(&h).iter().map(|(_, r)| *r).collect::<Vec<_>>(), with_adj.iter().map(|(_, r)| *r).collect::<Vec<_>>());
     }
@@ -483,7 +483,7 @@ fn pushing_skips_collapsed_groups_and_respects_the_filler() {
     assert_eq!(hs[3], Pane::new(&["history"]).min_height());
     assert_eq!(hs[0], before[0] + (before[2] - Pane::new(&["navigator"]).min_height()) + (before[3] - Pane::new(&["history"]).min_height()));
     assert!((total(&hs) - 1200.0).abs() < 1e-3);
-    assert!(sec(&l, "history").height.is_none(), "the filler's height is never stored");
+    assert!(pane(&l, "history").height.is_none(), "the filler's height is never stored");
     // Dragging up from Navigator over the collapsed Properties shrinks Color.
     let hs = resized(&mut l, &shown, 1200.0, 2, -5000.0);
     assert_eq!(hs[0], Pane::new(&["color"]).min_height());
@@ -529,14 +529,14 @@ fn reset_workspace_restores_the_default_layout_and_new_workspaces_keep_theirs() 
     let mut h = harness(app, vec2(1200.0, 800.0), ThemeKind::ProMedium);
     let ctx = h.ctx.clone();
     let default = last_rects(&h.ctx);
-    sec_mut(&mut h.state_mut().ui.dock, "properties").height = Some(120.0);
+    pane_mut(&mut h.state_mut().ui.dock, "properties").height = Some(120.0);
     h.state_mut().ui.dock.set_collapsed(0, true);
     h.state_mut().ui.dock.drop_tab("channels", Drop::NewAt(0));
     crate::menus::invoke(h.state_mut(), &ctx, "window.workspace.newWorkspace", json!({"name": "Tall Layers"})).unwrap();
     let mine = h.state().ui.dock.clone();
     crate::menus::invoke(h.state_mut(), &ctx, "window.workspace.essentials", json!({})).unwrap();
     assert_eq!(h.state().ui.dock, DockLayout::default());
-    sec_mut(&mut h.state_mut().ui.dock, "color").height = Some(300.0);
+    pane_mut(&mut h.state_mut().ui.dock, "color").height = Some(300.0);
     crate::menus::invoke(h.state_mut(), &ctx, "window.workspace.resetWorkspace", json!({})).unwrap();
     h.run_steps(3);
     assert_eq!(last_rects(&h.ctx), default);
@@ -649,7 +649,7 @@ fn tiny_windows_do_not_panic() {
 fn the_rail_and_window_menu_never_lose_a_panel() {
     let (mut app, _, _) = app_with_layers();
     let ctx = egui::Context::default();
-    let collapsed = |app: &PhotocraftApp, id: &str| sec(&app.ui.dock, id).collapsed;
+    let collapsed = |app: &PhotocraftApp, id: &str| pane(&app.ui.dock, id).collapsed;
     // The rail collapses and expands a docked pane; it never hides it (#129).
     rail_click(&mut app, "layers");
     assert!(app.ui.dock.visible("layers") && collapsed(&app, "layers"));
@@ -788,10 +788,10 @@ fn studio_pane_buttons_collapse_and_close() {
         assert!(r.intersect(collapse).width() <= 0.5 && r.intersect(close).width() <= 0.5 && r.intersect(s.menu).width() <= 0.5);
     }
     click(&mut h, collapse.center(), PointerButton::Primary);
-    assert!(sec(&h.state().ui.dock, "properties").collapsed);
+    assert!(pane(&h.state().ui.dock, "properties").collapsed);
     let collapse = strip_of(&h, "properties").collapse.unwrap();
     click(&mut h, collapse.center(), PointerButton::Primary);
-    assert!(!sec(&h.state().ui.dock, "properties").collapsed);
+    assert!(!pane(&h.state().ui.dock, "properties").collapsed);
     let close = strip_of(&h, "properties").close.unwrap();
     click(&mut h, close.center(), PointerButton::Primary);
     assert!(!h.state().ui.dock.visible("properties"));
@@ -878,7 +878,7 @@ fn default_layout_shows_ten_layer_rows_at_900pt() {
         assert!(rows >= want, "{size:?}: {rows} rows visible, want ≥ {want}: {drawn:?}");
         // Color and Properties stay open, just not at the expense of Layers.
         for id in ["color", "properties"] {
-            assert!(rect_of(&h, id).height() >= sec(&h.state().ui.dock, id).compact_height() - 0.5, "{id} at {size:?}: {drawn:?}");
+            assert!(rect_of(&h, id).height() >= pane(&h.state().ui.dock, id).compact_height() - 0.5, "{id} at {size:?}: {drawn:?}");
         }
     }
 }
@@ -1134,8 +1134,8 @@ fn tabs_close_on_hover_or_middle_click_and_the_strip_plus_adds_a_tab() {
     }
 }
 
-/// Studio's icon rail: middle click closes a module, the right-click menu closes a tab or its
-/// group, or expands the panels again.
+/// Studio's icon rail: middle click closes a module; the right-click menu offers Close and Close
+/// Tab Group, like every other panel menu, and Expand Panels.
 #[test]
 fn studio_rail_icons_have_a_context_menu() {
     use egui_kittest::kittest::Queryable;
@@ -1147,7 +1147,7 @@ fn studio_rail_icons_have_a_context_menu() {
     let icon = |h: &Harness<'static, PhotocraftApp>, l: &str| h.get_by_label(l).rect().center();
     let p = icon(&h, "Layers");
     click(&mut h, p, PointerButton::Secondary);
-    h.get_by_label("Close Tab").click();
+    h.get_by_label("Close").click();
     h.run_steps(3);
     assert!(!h.state().ui.dock.visible("layers"));
     let p = icon(&h, "Properties");

@@ -75,7 +75,7 @@ pub struct CardResponse {
     pub tabs: Vec<(usize, Rect)>,
     /// The » overflow button, when some tabs didn't fit.
     pub chevron: Option<Rect>,
-    /// The tab being dragged this frame, and the one whose drag ended (dock sections).
+    /// The tab being dragged this frame, and the one whose drag ended (dock panes).
     pub tab_drag: Option<usize>,
     pub tab_drag_stopped: Option<usize>,
     /// Studio: the header's collapse chevron and close cross (Pro collapses on a double-click and
@@ -91,7 +91,7 @@ pub fn card_ex(ui: &mut Ui, id: &str, tabs: &[&str], selected: &mut usize, colla
     card_impl(ui, id, tabs, selected, collapsed, false, body)
 }
 
-/// A dock section's [`card_ex`]: its tabs are modules, closed with a hover × or a middle-click,
+/// A dock pane's [`card_ex`]: its tabs are modules, closed with a hover × or a middle-click,
 /// and a round + after them adds one (theme tokens `tab_close`, `tab_add`).
 pub fn dock_card(ui: &mut Ui, id: &str, tabs: &[&str], selected: &mut usize, collapsed: bool, body: impl FnOnce(&mut Ui, usize)) -> CardResponse {
     card_impl(ui, id, tabs, selected, collapsed, true, body)

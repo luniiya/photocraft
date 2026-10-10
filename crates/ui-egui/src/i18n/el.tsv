@@ -1473,8 +1473,8 @@
 	Delete brush	Διαγραφή πινέλου
 	Drag the arrow to set the angle, the dots to set the roundness	Σύρετε το βέλος για τη γωνία και τις κουκκίδες για τη στρογγυλότητα
 	Expand Panel Group	Ανάπτυξη ομάδας πλαισίων
-	Move Group Down	Μετακίνηση ομάδας προς τα κάτω
-	Move Group Up	Μετακίνηση ομάδας προς τα επάνω
+	Move Panel Group Down	Μετακίνηση ομάδας πλαισίων προς τα κάτω
+	Move Panel Group Up	Μετακίνηση ομάδας πλαισίων προς τα επάνω
 	Reset the brush to the defaults	Επαναφορά προεπιλεγμένων ρυθμίσεων πινέλου
 	Restore original size	Επαναφορά αρχικού μεγέθους
 	Search Brushes	Αναζήτηση πινέλων

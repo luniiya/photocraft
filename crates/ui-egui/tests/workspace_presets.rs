@@ -30,7 +30,7 @@ fn layout(app: &PhotocraftApp) -> Value {
     json!({"panels": app.ui.panels, "dock": app.ui.dock, "timelineOpen": app.ui.timeline.open})
 }
 
-/// The preset group of each section, top to bottom.
+/// The preset group of each pane, top to bottom.
 fn shown(app: &PhotocraftApp) -> Vec<&'static str> {
     app.ui
         .dock
@@ -40,7 +40,7 @@ fn shown(app: &PhotocraftApp) -> Vec<&'static str> {
         .collect()
 }
 
-fn section(app: &PhotocraftApp, id: &str) -> Option<usize> {
+fn pane(app: &PhotocraftApp, id: &str) -> Option<usize> {
     app.ui.dock.pane_of(id)
 }
 
@@ -74,11 +74,11 @@ fn presets_select_expected_panels_and_reset_every_dock_group() {
             if app.ui.dock.group_shown(g) { app.ui.dock.hide_group(g) } else { app.ui.dock.show_group(g, true) }
         }
         app.ui.timeline.open = !timeline;
-        let layers = section(&app, "layers").unwrap();
+        let layers = pane(&app, "layers").unwrap();
         app.ui.dock.move_pane(layers, Some(0));
-        let layers = section(&app, "layers").unwrap();
+        let layers = pane(&app, "layers").unwrap();
         app.ui.dock.set_collapsed(layers, true);
-        if let Some(i) = section(&app, "properties") {
+        if let Some(i) = pane(&app, "properties") {
             app.ui.dock.panes[i].height = Some(99.0);
         }
         app.ui.dock.show("paths");
@@ -146,7 +146,7 @@ fn custom_workspaces_restore_timeline_visibility_and_dock_after_presets() {
     let mut app = app();
     for (name, suffix) in [("Custom still", "pixelArt"), ("Custom motion", "motion")] {
         select(&mut app, suffix);
-        let moved = section(&app, "navigator").or(section(&app, "layers")).unwrap();
+        let moved = pane(&app, "navigator").or(pane(&app, "layers")).unwrap();
         app.ui.dock.move_pane(moved, Some(0));
         app.ui.dock.show("swatches");
         if let Some(props) = app.ui.dock.pane_of("properties") {

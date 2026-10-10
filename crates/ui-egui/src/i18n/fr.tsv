@@ -1935,8 +1935,8 @@
 	Fade steps	Étapes d'estompage
 	Hide the layer's effects  ({key}-click: all layers)	Masquer les effets du calque  ({key}-clic : tous les calques)
 	Import Brushes… (.abr)	Importer des pinceaux… (.abr)
-	Move Group Down	Descendre le groupe
-	Move Group Up	Monter le groupe
+	Move Panel Group Down	Descendre le groupe de panneaux
+	Move Panel Group Up	Monter le groupe de panneaux
 	Reset the brush to the defaults	Réinitialiser le pinceau aux valeurs par défaut
 	Restore original size	Rétablir la taille d'origine
 	Roundness:	Arrondi :
