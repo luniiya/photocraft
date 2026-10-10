@@ -221,6 +221,21 @@ impl DockLayout {
         }
     }
 
+    /// The + picker: module `id` as a pane of its own, above the filler, whatever else is
+    /// docked (`show` would join a sibling's pane as a tab, or bring a whole group back). A
+    /// module already docked is just brought forward.
+    pub fn add_pane(&mut self, id: &str) {
+        if modules::get(id).is_none() {
+            return;
+        }
+        if self.visible(id) {
+            self.show(id);
+            return;
+        }
+        let at = self.panes.iter().rposition(|s| !s.collapsed).unwrap_or(self.panes.len());
+        self.panes.insert(at, Pane::new(&[id]));
+    }
+
     /// Take module `id` out of the dock; a pane left empty goes too.
     pub fn close(&mut self, id: &str) {
         for s in &mut self.panes {
@@ -884,7 +899,8 @@ pub fn picker_list(app: &mut PhotocraftApp, ui: &mut egui::Ui, search_id: egui::
                 } else if let Some(i) = into.filter(|i| *i < app.ui.dock.panes.len()) {
                     app.ui.dock.drop_tab_or_add(m.id, i);
                 } else {
-                    reveal(app, m.id);
+                    app.ui.dock.add_pane(m.id);
+                    app.ui.panels.dock = true;
                 }
             }
         }

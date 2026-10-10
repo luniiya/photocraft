@@ -153,6 +153,25 @@ fn add_panel_puts_a_module_in_the_pane_asked() {
 }
 
 #[test]
+fn add_pane_is_always_a_pane_of_its_own() {
+    let mut l = DockLayout::essentials(true);
+    // A sibling (Character) is docked, but the + picker still makes a pane (show would join it).
+    l.add_pane("character");
+    l.add_pane("paragraph");
+    assert_eq!(tabs(&l, "character"), ["character"]);
+    assert_eq!(tabs(&l, "paragraph"), ["paragraph"]);
+    // No group comes back with it, and the filler stays last.
+    l.add_pane("actions");
+    assert_eq!(tabs(&l, "actions"), ["actions"]);
+    assert_eq!(l.panes.last().unwrap().tabs, ["layers", "channels", "paths"]);
+    // Already docked: brought forward, nothing added; unknown ids do nothing.
+    let n = l.panes.len();
+    l.add_pane("layers");
+    l.add_pane("bogus");
+    assert_eq!(l.panes.len(), n);
+}
+
+#[test]
 fn show_brings_back_a_whole_group_in_its_place_and_hide_closes_a_pane() {
     let mut l = DockLayout::essentials(true);
     l.show("info");
