@@ -10,6 +10,6 @@ pub const MODULE: Module = Module {
     siblings: &["actions", "layerComps"],
     size: Size::new(200.0, 140.0, 140.0),
     fills: true,
-    body: crate::panels::history,
+    group: crate::dock::Group::History,
     menu: None,
 };

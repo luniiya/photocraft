@@ -10,6 +10,6 @@ pub const MODULE: Module = Module {
     siblings: &["layers", "channels"],
     size: Size::new(320.0, 200.0, 140.0),
     fills: false,
-    body: crate::vector_ui::paths_panel,
+    group: crate::dock::Group::Layers,
     menu: None,
 };

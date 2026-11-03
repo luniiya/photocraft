@@ -1,7 +1,6 @@
 //! Character: type settings of the selected text.
 
 use super::{Module, Size};
-use crate::PhotocraftApp;
 
 pub const MODULE: Module = Module {
     id: "character",
@@ -11,10 +10,6 @@ pub const MODULE: Module = Module {
     siblings: &["paragraph"],
     size: Size::new(270.0, 160.0, 80.0),
     fills: false,
-    body,
+    group: crate::dock::Group::Character,
     menu: None,
 };
-
-fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
-    crate::type_tool::character_panel(app, ui, false);
-}

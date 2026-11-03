@@ -10,6 +10,6 @@ pub const MODULE: Module = Module {
     siblings: &["adjustments"],
     size: Size::new(250.0, 160.0, 80.0),
     fills: false,
-    body: crate::panels::properties_body,
+    group: crate::dock::Group::Properties,
     menu: None,
 };

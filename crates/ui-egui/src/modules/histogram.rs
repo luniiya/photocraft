@@ -10,6 +10,6 @@ pub const MODULE: Module = Module {
     siblings: &["navigator", "info"],
     size: Size::new(210.0, 140.0, 80.0),
     fills: false,
-    body: crate::tone::histogram_panel,
+    group: crate::dock::Group::Navigator,
     menu: None,
 };

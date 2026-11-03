@@ -8,6 +8,7 @@
 //! how tall) is [`crate::dock::DockLayout`]'s business.
 
 use crate::PhotocraftApp;
+use crate::dock::Group;
 
 include!(concat!(env!("OUT_DIR"), "/modules.rs"));
 
@@ -46,8 +47,8 @@ pub struct Module {
     /// The body lays out its own scrolling list and footer, so it gets the full pane height
     /// instead of a scroll area (Layers, History).
     pub fills: bool,
-    /// Draw the body.
-    pub body: fn(&mut PhotocraftApp, &mut egui::Ui),
+    /// The native dock group whose body this module shares (the panel registry's grouping).
+    pub group: Group,
     /// Extra items at the top of the pane's panel menu (≡) while this module is the front tab.
     pub menu: Option<fn(&mut PhotocraftApp, &mut egui::Ui)>,
 }
@@ -55,6 +56,12 @@ pub struct Module {
 /// The module with this id.
 pub fn get(id: &str) -> Option<&'static Module> {
     ALL.iter().copied().find(|m| m.id == id)
+}
+
+/// A module id from its id or English title, ignoring case and surrounding space.
+pub fn normalize(raw: &str) -> Option<&'static str> {
+    let raw = raw.trim();
+    ALL.iter().find(|m| m.id.eq_ignore_ascii_case(raw) || m.title.eq_ignore_ascii_case(raw)).map(|m| m.id)
 }
 
 /// The module a menu item shows or hides.
@@ -65,6 +72,11 @@ pub fn by_menu_id(menu_id: &str) -> Option<&'static Module> {
 /// A module's title, translated.
 pub fn title(id: &str) -> &'static str {
     get(id).map_or("", |m| tl!(m.title))
+}
+
+/// A module's native dock group.
+pub fn group(id: &str) -> Option<Group> {
+    get(id).map(|m| m.group)
 }
 
 #[cfg(test)]
@@ -101,9 +113,9 @@ mod tests {
     /// Titles are dynamic labels the `tl!` literal scanner cannot see.
     #[test]
     fn titles_are_translated() {
-        for l in crate::i18n::LANGUAGES.iter().filter(|l| l.complete_menus) {
-            let missing: Vec<_> = ALL.iter().map(|m| m.title).filter(|t| l.catalog().plain(t).is_none()).collect();
-            assert!(missing.is_empty(), "{}: untranslated module titles {missing:?}", l.code);
+        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
+            let missing: Vec<_> = ALL.iter().map(|m| m.title).filter(|t| !crate::i18n::has(lang, t)).collect();
+            assert!(missing.is_empty(), "{}: untranslated module titles {missing:?}", lang.code());
         }
     }
 }

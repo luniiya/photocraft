@@ -10,6 +10,6 @@ pub const MODULE: Module = Module {
     siblings: &["color", "swatches", "gradients"],
     size: Size::new(190.0, 130.0, 80.0),
     fills: false,
-    body: crate::preset_panels::patterns_panel,
+    group: crate::dock::Group::Color,
     menu: None,
 };
