@@ -9,8 +9,9 @@ pub fn properties_window(app: &mut PhotocraftApp, ctx: &egui::Context) {
     if app.ui.docking.is_some() {
         return;
     }
-    // Pro (Photoshop) docks Properties; Studio floats it over the canvas.
-    if !app.ui.panels.properties || Tokens::get(ctx).pro {
+    // Pro (Photoshop) docks Properties; Studio floats it over the canvas. Bubble docks it too.
+    let tokens = Tokens::get(ctx);
+    if !app.ui.panels.properties || tokens.pro || tokens.kind.is_bubble() {
         return;
     }
     if app.session.active().is_none() {

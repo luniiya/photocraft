@@ -159,14 +159,24 @@ pub fn doc_point_at(app: &PhotocraftApp, pos: Pos2) -> Option<[f64; 2]> {
 /// point; `View::zoom` is stored in physical pixels per document pixel. `aspect` is the
 /// displayed pixel aspect ratio ([`ViewXform::aspect`]): the image is that much wider on screen.
 pub fn fit_view(view: &mut View, doc: &Document, area: Vec2, ppp: f32, aspect: f32) {
+    fit_view_insets(view, doc, area, [20.0; 4], ppp, aspect);
+}
+
+/// Fit inside the part of a full-size canvas left clear by floating chrome. The insets are
+/// left, top, right and bottom in egui points; the camera's centre compensates for their midpoint.
+pub fn fit_view_insets(view: &mut View, doc: &Document, area: Vec2, insets: [f32; 4], ppp: f32, aspect: f32) {
     let (w, h) = (doc.size.width as f32, doc.size.height as f32);
-    let shown_w = w * if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
+    let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
+    let shown_w = w * aspect;
+    let clear = Vec2::new((area.x - insets[0] - insets[2]).max(1.0), (area.y - insets[1] - insets[3]).max(1.0));
     // Fit never magnifies past 100%: one image pixel per *physical* pixel, so the cap applies
     // after the points → device pixels conversion (a 150% display would otherwise open at 150%).
-    let fit = ((area.x - 40.0) / shown_w).min((area.y - 40.0) / h) * ppp;
+    let fit = (clear.x / shown_w).min(clear.y / h) * ppp;
     let zoom = crate::zoom_levels::clamp(fit.min(1.0), [doc.size.width, doc.size.height]);
+    let offset = Vec2::new((insets[0] - insets[2]) * 0.5, (insets[1] - insets[3]) * 0.5);
+    let points = zoom / ppp;
     view.zoom = zoom;
-    view.center = [w / 2.0, h / 2.0];
+    view.center = if points.is_finite() && points > 0.0 { [w / 2.0 - offset.x / (points * aspect), h / 2.0 - offset.y / points] } else { [w / 2.0, h / 2.0] };
     view.fit_pending = false;
     view.fill_pending = false;
 }
@@ -259,4 +269,23 @@ pub(super) fn zoom_about(view: &mut View, xf: &ViewXform, p: Pos2, new_zoom: f32
     let ppp = if ppp.is_finite() && ppp > 0.0 { ppp } else { 1.0 };
     let u = xf.unmap_vec((p - xf.rect.center()) / (new_zoom / ppp));
     view.center = [before[0] as f32 - u.x, before[1] as f32 - u.y];
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bubble_fit_centres_in_the_clear_region_without_shrinking_the_canvas() {
+        let doc = Document::new("test", photocraft_doc::Size::new(1000, 500), photocraft_doc::ColorMode::Rgb, photocraft_doc::SampleType::U8);
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(1200.0, 800.0));
+        let mut view = View::default();
+        fit_view_insets(&mut view, &doc, rect.size(), [70.0, 62.0, 326.0, 64.0], 1.0, 1.0);
+        assert!((view.zoom - 0.804).abs() < 0.0001);
+        let xf = ViewXform { rect, zoom: view.zoom, center: view.center, flip: false, rotation: 0.0, aspect: 1.0 };
+        let centre = xf.to_screen(500.0, 250.0);
+        assert!((centre.x - 472.0).abs() < 0.01);
+        assert!((centre.y - 399.0).abs() < 0.01);
+        assert_eq!(xf.rect, rect);
+    }
 }

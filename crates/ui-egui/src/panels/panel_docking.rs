@@ -146,6 +146,7 @@ fn legacy(app: &PhotocraftApp) -> Layout<String> {
 /// that are not shown, with every tab.
 fn legacy_layout(app: &PhotocraftApp, all: bool) -> Layout<String> {
     let pro = app.ui.theme.is_pro();
+    let bubble = app.ui.theme.is_bubble();
     let mut groups = Vec::new();
     let mut floating = Vec::new();
     for group in app.ui.dock.order().into_iter().filter(|g| all || g.shown(&app.ui.panels)) {
@@ -157,7 +158,7 @@ fn legacy_layout(app: &PhotocraftApp, all: bool) -> Layout<String> {
         }
         let selected = *group.tab_mut(&mut app.ui.dock_tabs.clone());
         let active = labels.get(selected).and_then(|label| normalize(label)).and_then(|id| panels.iter().position(|p| p == id)).unwrap_or(0);
-        if group == Group::Properties && !pro {
+        if group == Group::Properties && !pro && !bubble {
             floating.push(Floating::single(panels, active, studio_properties_rect(app)).with_id(PROPERTIES_WINDOW));
             continue;
         }
@@ -535,18 +536,32 @@ pub(crate) fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let fillers = fillers(&layout);
     let reveal = app.ui.docking_reveal.take();
     let t = crate::theme::Tokens::get(ui.ctx());
+    let bubble = t.kind.is_bubble();
     let locked = app.session.prefs().workspace_locked;
     let mut style = craft_ui::docking::DockStyle::from_ui(ui);
-    style.tab_height = if t.pro { 28.0 } else { 40.0 };
+    style.tab_height = if bubble {
+        36.0
+    } else if t.pro {
+        28.0
+    } else {
+        40.0
+    };
     style.min_pane = 0.0;
-    style.background = t.card;
+    style.gap = if bubble { 0.0 } else { style.gap };
+    style.background = if bubble { egui::Color32::TRANSPARENT } else { t.card };
     // Studio themes leave the strip transparent over the dock's card; a floating group has no
     // card behind it, so the canvas showed through its titles (#4509).
-    style.tab_background = if t.tab_strip.a() == 0 { t.card } else { t.tab_strip };
-    style.active_background = t.card;
+    style.tab_background = if bubble {
+        t.glass_card()
+    } else if t.tab_strip.a() == 0 {
+        t.card
+    } else {
+        t.tab_strip
+    };
+    style.active_background = if bubble { t.accent_soft } else { t.card };
     style.text = t.text;
     style.inactive_text = t.text_dim;
-    style.border = egui::Stroke::new(1.0, t.card_border);
+    style.border = if bubble { egui::Stroke::NONE } else { egui::Stroke::new(1.0, t.card_border) };
     style.accent = t.accent;
     style.right_to_left = crate::direction::is_rtl();
     style.new_dock_zones = true;
@@ -1255,11 +1270,7 @@ fn picker_list(
                         Some(anchor) => Action::OpenAt {
                             panel: module.id.to_owned(),
                             anchor: anchor.to_owned(),
-                            placement: if new_group {
-                                Placement::Group { below: true, height: None }
-                            } else {
-                                Placement::Tab { before: None }
-                            },
+                            placement: if new_group { Placement::Group { below: true, height: None } } else { Placement::Tab { before: None } },
                         },
                         None => Action::Open { panel: module.id.to_owned(), anchor: None },
                     }
@@ -1277,8 +1288,14 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         #[cfg(test)]
         ui.ctx().data_mut(|data| data.get_temp_mut_or_default::<Vec<(String, egui::Rect)>>(bodies_id()).push((id.clone(), ui.max_rect())));
         if id == CANVAS {
-            crate::panels::canvas_panel(self.app, ui);
+            if !self.app.ui.theme.is_bubble() {
+                crate::panels::canvas_panel(self.app, ui);
+            }
             return;
+        }
+        if self.app.ui.theme.is_bubble() {
+            let key = egui::Id::unique("bubble-panel-body-rects");
+            ui.ctx().data_mut(|data| data.get_temp_mut_or_default::<std::collections::HashMap<String, egui::Rect>>(key).insert(id.clone(), ui.max_rect()));
         }
         let viewport = ui.ctx().viewport_id();
         if viewport != egui::ViewportId::ROOT && ui.memory(|m| m.focused().is_some()) {
@@ -1322,6 +1339,15 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
     fn group_header(&mut self, ui: &mut egui::Ui, panels: &[String], active: &String, floating: bool) {
         let collapsed = panels.iter().all(|id| self.collapsed.contains(id));
+        let t = crate::theme::Tokens::get(ui.ctx());
+        if t.kind.is_bubble() {
+            let key = egui::Id::unique("bubble-panel-body-rects");
+            let body = ui.ctx().data(|data| data.get_temp::<std::collections::HashMap<String, egui::Rect>>(key)).and_then(|mut rects| rects.remove(active));
+            if let Some(body) = body {
+                let card = egui::Rect::from_min_max(egui::pos2(body.left(), body.top() - self.strip), body.max);
+                ui.ctx().layer_painter(ui.layer_id()).rect(card, t.radius, t.glass_card(), egui::Stroke::new(1.0, t.card_border), egui::StrokeKind::Inside);
+            }
+        }
         let locked = self.app.session.prefs().workspace_locked;
         let resp = crate::icons::button(ui, "ellipsis", ui.available_height().min(28.0), false, tl!("Panel menu"));
         egui::Popup::menu(&resp).show(|ui| {
@@ -1374,8 +1400,7 @@ pub(crate) fn sync_visibility(app: &mut PhotocraftApp) {
         }
         let pro = app.ui.theme.is_pro();
         for group in Group::ALL {
-            *group.shown_mut(&mut app.ui.panels) =
-                crate::modules::ALL.iter().filter(|m| m.group == group).any(|m| layout.contains(&m.id.to_owned()));
+            *group.shown_mut(&mut app.ui.panels) = crate::modules::ALL.iter().filter(|m| m.group == group).any(|m| layout.contains(&m.id.to_owned()));
             for (index, label) in group.tabs(pro).iter().enumerate() {
                 if let Some(id) = normalize(label) {
                     if layout.contains(&id.to_owned()) {

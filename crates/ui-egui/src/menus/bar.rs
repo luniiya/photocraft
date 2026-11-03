@@ -60,7 +60,16 @@ pub fn menu_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> f32 {
                 // The bar's close behaviour and style, as a menu (not bar) config so submenus inside
                 // render as submenus.
                 let bar = egui::containers::menu::MenuConfig::find(ui);
-                let config = egui::containers::menu::MenuConfig::new().close_behavior(bar.close_behavior).style(bar.style.clone());
+                let base_style = bar.style.clone();
+                let style = egui::style::StyleModifier::new(move |style| {
+                    base_style.apply(style);
+                    if t.glass.centered_menus {
+                        style.visuals.window_fill = t.glass_menu();
+                        style.visuals.window_stroke = egui::Stroke::new(1.0, t.card_border);
+                        style.visuals.menu_corner_radius = egui::CornerRadius::same(t.radius_lg as u8);
+                    }
+                });
+                let config = egui::containers::menu::MenuConfig::new().close_behavior(bar.close_behavior).style(style);
                 let open = title_press(ui.ctx(), &title);
                 // The release ending the press that opened this menu is a click "outside" the
                 // popup: it must not close it again.
@@ -75,7 +84,7 @@ pub fn menu_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> f32 {
                     config.close_behavior
                 };
                 egui::Popup::menu(&title)
-                    .align(crate::direction::below())
+                    .align(top_menu_align(&t))
                     .open_memory(open)
                     .close_behavior(close)
                     .style(config.style.clone())
@@ -154,8 +163,23 @@ pub fn menu_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> f32 {
     edge
 }
 
+fn top_menu_align(t: &crate::theme::Tokens) -> egui::RectAlign {
+    if t.glass.centered_menus { egui::RectAlign::BOTTOM } else { crate::direction::below() }
+}
+
 fn press_gesture_id() -> egui::Id {
     egui::Id::unique("menu-press-gesture")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn only_centered_glass_themes_center_top_menus() {
+        let bubble = crate::theme::Tokens::for_kind(crate::theme::ThemeKind::BubbleLight);
+        let pro = crate::theme::Tokens::for_kind(crate::theme::ThemeKind::Pro);
+        assert_eq!(super::top_menu_align(&bubble), egui::RectAlign::BOTTOM);
+        assert_ne!(super::top_menu_align(&pro), egui::RectAlign::BOTTOM);
+    }
 }
 
 /// A menu title's open/close command this frame, the press opens a closed menu (and

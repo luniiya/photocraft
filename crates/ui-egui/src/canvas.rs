@@ -1734,7 +1734,7 @@ fn layer_picker_eyedropper(app: &mut PhotocraftApp, ui: &egui::Ui, ctx: &egui::C
 
 /// Per-frame reconciliation of the camera with its document: resize re-centre, pending fit/fill,
 /// and the overscroll clamp. Returns the pixel aspect the view is drawn with.
-fn sync_view_to_document(app: &PhotocraftApp, ctx: &egui::Context, view: &mut View, doc: &Document, rect: Rect, ppp: f32) -> f32 {
+fn sync_view_to_document(app: &PhotocraftApp, ctx: &egui::Context, view: &mut View, doc: &Document, rect: Rect, ppp: f32, primary: bool) -> f32 {
     let size = [doc.size.width, doc.size.height];
     if view.doc_size != size {
         // Like Photoshop: keep the zoom level, re-centre the resized document.
@@ -1746,7 +1746,12 @@ fn sync_view_to_document(app: &PhotocraftApp, ctx: &egui::Context, view: &mut Vi
     // View › Pixel Aspect Ratio Correction: document pixels are shown this much wider.
     let aspect = app.ui.view.display_aspect();
     if view.fit_pending && rect.width() > 50.0 {
-        fit_view(view, doc, rect.size(), ppp, aspect);
+        if primary && app.ui.theme.is_bubble() && !app.ui.view.hides_chrome() {
+            let right = if app.ui.panels.dock { 326.0 } else { 26.0 };
+            view_xform::fit_view_insets(view, doc, rect.size(), [70.0, 62.0, right, 64.0], ppp, aspect);
+        } else {
+            fit_view(view, doc, rect.size(), ppp, aspect);
+        }
     }
     if view.fill_pending && rect.width() > 50.0 {
         fill_view(view, doc, rect.size(), ppp, aspect);
@@ -1830,7 +1835,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     }
     let doc = app.session.documents()[idx].doc.clone();
     let size = [doc.size.width, doc.size.height];
-    let aspect = sync_view_to_document(app, &ctx, &mut view, &doc, rect, ppp);
+    let aspect = sync_view_to_document(app, &ctx, &mut view, &doc, rect, ppp, primary);
     update_polygon_camera(app, &ctx, (idx, primary), rect, &mut view, ppp, aspect);
 
     let flip = app.ui.view.flip_horizontal;

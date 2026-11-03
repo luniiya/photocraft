@@ -279,22 +279,65 @@ impl PhotocraftApp {
         if (chrome || tabbed_in) && self.ui.panels.menu_bar {
             panels::title_bar(self, ui);
         }
-        if (chrome && self.ui.panels.options_bar) || tabbed_in {
-            panels::options_bar(self, ui);
-        }
-        if chrome && self.ui.panels.status_bar {
-            panels::status_bar(self, ui);
-        }
-        if (chrome && self.ui.panels.toolbar) || tabbed_in {
-            panels::toolbar(self, ui);
-        }
+        let bubble = self.ui.theme.is_bubble();
         // craft-ui's layout holds the canvas as its protected `canvas` panel.
         let docking = (chrome && self.ui.panels.dock) || tabbed_in;
+        // Bubble floats its chrome over the canvas; the other themes keep the panel rows.
+        let floating = bubble && chrome;
+        if !floating {
+            if bubble {
+                // The toolbar and the options bar share the row below the menus, as in the web UI.
+                if (chrome && self.ui.panels.toolbar) || tabbed_in {
+                    panels::toolbar(self, ui);
+                }
+                if (chrome && self.ui.panels.options_bar) || tabbed_in {
+                    panels::options_bar(self, ui);
+                }
+            } else {
+                if (chrome && self.ui.panels.options_bar) || tabbed_in {
+                    panels::options_bar(self, ui);
+                }
+                if (chrome && self.ui.panels.toolbar) || tabbed_in {
+                    panels::toolbar(self, ui);
+                }
+            }
+            if chrome && self.ui.panels.status_bar && !bubble {
+                panels::status_bar(self, ui);
+            }
+        }
+        let content = ui.available_rect_before_wrap();
         if docking {
             panels::dock_area(self, ui);
+            if floating {
+                panels::floating_search(self, &ctx, content);
+                if self.ui.panels.toolbar {
+                    panels::floating_toolbar(self, &ctx, content);
+                }
+                if self.ui.panels.options_bar {
+                    let left = panels::bubble_search_width(self);
+                    panels::floating_options_bar(self, &ctx, content, left);
+                }
+            }
+        } else if floating {
+            let t = theme::Tokens::get(&ctx);
+            panels::bubble_canvas_panel(self, ui, &t, false);
+            panels::floating_search(self, &ctx, content);
+            if self.ui.panels.toolbar {
+                panels::floating_toolbar(self, &ctx, content);
+            }
+            if self.ui.panels.options_bar {
+                let left = panels::bubble_search_width(self);
+                panels::floating_options_bar(self, &ctx, content, left);
+            }
+            if self.ui.panels.rail {
+                panels::floating_rail(self, &ctx, content);
+            }
         } else {
             let t = theme::Tokens::get(&ctx);
             let backdrop = if chrome { prefs_ui::pasteboard_color(self).unwrap_or(t.canvas) } else { egui::Color32::BLACK };
+            if chrome && bubble {
+                panels::rail_panel(self, ui);
+            }
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(backdrop)).show(ui, |ui| {
                 canvas::document_area(self, ui);
             });
@@ -357,6 +400,13 @@ impl PhotocraftApp {
             // Block input without a backdrop: the worker may still be capturing the screen.
             egui::Modal::new(egui::Id::unique("screen-color-wait")).frame(egui::Frame::NONE).backdrop_color(egui::Color32::TRANSPARENT).show(&ctx, |_| {});
             ctx.set_cursor_icon(egui::CursorIcon::Wait);
+        }
+        if chrome && bubble {
+            let t = theme::Tokens::get(&ctx);
+            if t.glass.outer_frame {
+                let frame = panels::bubble_frame_rect(content);
+                ui.painter().rect_stroke(frame, t.frame_radius(), egui::Stroke::new(1.0, t.card_border), egui::StrokeKind::Inside);
+            }
         }
         true
     }

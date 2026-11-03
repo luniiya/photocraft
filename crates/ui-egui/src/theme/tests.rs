@@ -58,6 +58,11 @@ fn scrollbar_thumb_stays_more_visible_than_its_track_in_every_theme() {
                 scroll.interact_background_opacity
             );
             assert_eq!(scroll.interact_handle_opacity, 1.0, "{kind:?}/{theme:?}: the thumb is opaque under the pointer");
+            if kind.is_bubble() {
+                assert_eq!(scroll.dormant_background_opacity, 0.0);
+                assert_eq!(scroll.active_background_opacity, 0.0);
+                assert_eq!(scroll.interact_background_opacity, 0.0);
+            }
         }
     }
 }
@@ -263,6 +268,35 @@ fn adwaita_themes_parse_and_meet_text_contrast() {
         assert!(contrast(t.primary_text, t.primary_bg) >= 3.0, "{kind:?}: suggested-action button label");
     }
     assert_eq!(ThemeKind::from_name("gnome dark"), Some(ThemeKind::AdwaitaDark));
+}
+
+#[test]
+fn bubble_themes_parse_and_hold_text_contrast() {
+    for (kind, alias) in [(ThemeKind::BubbleLight, "bubble"), (ThemeKind::BubbleDark, "bubble dark")] {
+        assert_eq!(ThemeKind::from_name(kind.id()), Some(kind));
+        assert_eq!(ThemeKind::from_name(kind.label()), Some(kind));
+        assert_eq!(ThemeKind::from_name(alias), Some(kind), "{alias}");
+        assert!(ThemeKind::ALL.contains(&kind));
+        let t = Tokens::for_kind(kind);
+        assert_eq!(t.kind, kind);
+        assert_eq!(t.dark(), kind == ThemeKind::BubbleDark);
+        assert!(!t.pro && t.round_chips && !t.bevel, "{kind:?}: the Bubble style uses floating chrome with rounded chips");
+        assert_eq!(t.frame_radius(), 20.0);
+        assert_eq!(t.glass_menu().a(), 235);
+        // Photobloom's lavender-tinted frosted cards.
+        assert_eq!(t.card, if t.dark() { Color32::from_rgb(28, 28, 32) } else { Color32::from_rgb(250, 250, 252) });
+        for surface in [t.chrome, t.dock, t.card, t.field] {
+            assert!(contrast(t.text, surface) >= 7.0, "{kind:?}: text on {surface:?}");
+            assert!(contrast(t.text_dim, surface) >= 4.5, "{kind:?}: dim text on {surface:?}");
+            assert!(contrast(t.text_faint, surface) >= 3.0, "{kind:?}: faint text on {surface:?}");
+            assert!(contrast(t.icon, surface) >= 3.0, "{kind:?}: icon on {surface:?}");
+        }
+        assert!(contrast(t.accent_text, t.card) >= 4.5, "{kind:?}: accent text");
+        for k in [1.0, 0.93, 0.85] {
+            assert!(contrast(t.primary_text, t.primary_bg.gamma_multiply(k)) >= 4.5, "{kind:?}: primary at {k}");
+        }
+        assert!(t.accent.b() > t.accent.r() && t.accent.r() > t.accent.g(), "lavender accent: {:?}", t.accent);
+    }
 }
 
 #[test]

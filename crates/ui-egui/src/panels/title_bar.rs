@@ -9,6 +9,9 @@ use super::{PhotocraftApp, Sense, Tokens, icons, theme, vec2, widgets};
 /// in-app bar shows menus and workspace controls only: no brand mark, no centred title.
 pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
+    let centered_menus = t.glass.centered_menus;
+    let menus_width_id = ui.scope_id().with("bubble-menus-width");
+    let last_menus_w = ui.ctx().data(|d| d.get_temp::<f32>(menus_width_id)).unwrap_or(430.0);
     let custom = app.custom_titlebar;
     let system = system_title_bar(app);
     // The caption buttons' room at each end (`titlebar`); a side with buttons has no margin.
@@ -22,7 +25,17 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     };
     let right = if caption_right > 0.0 { 0 } else { 10 };
     let bar = egui::Panel::top("title_bar")
-        .exact_size(crate::titlebar::bar_height(app, ui.ctx(), if t.pro { 32.0 } else { 38.0 }))
+        .exact_size(crate::titlebar::bar_height(
+            app,
+            ui.ctx(),
+            if t.kind.is_bubble() {
+                28.0
+            } else if t.pro {
+                32.0
+            } else {
+                38.0
+            },
+        ))
         .frame(egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin { left, right, top: 0, bottom: 0 }))
         .show(ui, |ui| {
             let full = ui.max_rect();
@@ -56,17 +69,26 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             let rtl = crate::direction::is_rtl();
             let mut free = (full.left(), full.right());
             crate::direction::horizontal_centered(ui, |ui| {
-                // The menus start beside the caption buttons at their end, if it has any.
-                let lead = if rtl { caption_right } else { caption_left };
-                if lead > 0.0 {
-                    ui.add_space(lead + 4.0);
+                if centered_menus {
+                    // Centre the menu titles themselves, as in the web UI, instead of leaving them
+                    // beside the brand mark. The width comes from the previous frame so the first
+                    // paint does not jump.
+                    let lead = ((full.width() - last_menus_w) * 0.5 - caption_left).max(0.0);
+                    ui.add_space(lead);
+                } else {
+                    // The menus start beside the caption buttons at their end, if it has any.
+                    let lead = if rtl { caption_right } else { caption_left };
+                    if lead > 0.0 {
+                        ui.add_space(lead + 4.0);
+                    }
+                    if !system {
+                        let side = if t.pro { 18.0 } else { 20.0 };
+                        let (mark, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
+                        crate::brand::paint_mark(ui, mark);
+                        ui.add_space(6.0);
+                    }
                 }
-                if !system {
-                    let side = if t.pro { 18.0 } else { 20.0 };
-                    let (mark, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
-                    crate::brand::paint_mark(ui, mark);
-                    ui.add_space(6.0);
-                }
+                let menus_start = if rtl { ui.cursor().right() } else { ui.cursor().left() };
                 // With the macOS menu bar the menus are at the top of the screen instead. Either way
                 // this is the menus' inner edge, facing the title.
                 let menus_end = if app.services.native_menu.is_some() {
@@ -74,6 +96,12 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 } else {
                     crate::menus::menu_bar(app, ui)
                 };
+                if centered_menus {
+                    let width = if rtl { menus_start - menus_end } else { menus_end - menus_start };
+                    if width > 1.0 {
+                        ui.ctx().data_mut(|d| d.insert_temp(menus_width_id, width));
+                    }
+                }
                 // The menu bar takes the whole row, so the far-end group gets its own rect: from
                 // the menus to the bar's end, or to the caption buttons.
                 let group = if rtl {
@@ -87,16 +115,20 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 let controls_end = {
                     let ui = &mut group_ui;
                     ui.spacing_mut().item_spacing.x = 6.0;
+                    // Bubble keeps search in its floating card and puts screen mode at the far end.
+                    if centered_menus {
+                        super::toolbar::screen_mode_button(app, ui, 28.0, true);
+                    }
                     let mut ws = app.ui.workspace.clone();
                     let options = crate::workspace_ui::switcher_options(app);
                     let opts: Vec<(String, &str)> = options.iter().map(|(k, l)| (k.clone(), l.as_str())).collect();
-                    // A narrow bar drops what is also in a menu, the theme toggle first
-                    // (Preferences), then search (Edit › Search), and narrows the switcher
-                    // (Window › Workspace) before anything runs over.
+                    // Other narrow bars drop appearance first, then search, before narrowing the
+                    // workspace switcher.
                     let room = ui.available_width();
-                    let icons_shown: u8 = if room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
-                        2
-                    } else if room >= WORKSPACE_MIN + ICON_SLOT {
+                    let icon_slots: u8 = 2;
+                    let icons_shown: u8 = if room >= WORKSPACE_MIN + f32::from(icon_slots) * ICON_SLOT {
+                        icon_slots
+                    } else if !centered_menus && room >= WORKSPACE_MIN + ICON_SLOT {
                         1
                     } else {
                         0
@@ -106,7 +138,8 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         app.ui.workspace = ws;
                         crate::menus::apply_workspace(app);
                     }
-                    if icons_shown >= 1
+                    if !centered_menus
+                        && icons_shown >= 1
                         && icons::button(ui, "search", 28.0, app.ui.palette_open, &crate::shortcuts::tip_label(app, "Search commands", "edit.search")).clicked()
                     {
                         app.ui.palette_open = !app.ui.palette_open;
@@ -117,7 +150,7 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         photocraft_engine::prefs::AppearanceMode::Light => ("sun", tl!("Light")),
                     };
                     let appearance_tip = format!("{}: {}", tl!("Appearance Mode"), appearance_label);
-                    if icons_shown >= 2 {
+                    if icons_shown >= 1 && (centered_menus || icons_shown >= 2) {
                         let button = icons::button(ui, theme_icon, 28.0, false, &appearance_tip);
                         if button.clicked() {
                             crate::prefs_ui::cycle_appearance(app, ui.ctx());
@@ -129,7 +162,7 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 free = if rtl { (controls_end, menus_end) } else { (menus_end, controls_end) };
             });
             ui.ctx().data_mut(|d| d.insert_temp(span_id, free));
-            if system {
+            if system || centered_menus {
                 return;
             }
             let font = theme::medium(13.0);
@@ -147,6 +180,10 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 ui.painter().galley(egui::pos2(x, full.center().y - g.size().y / 2.0), g, t.text_dim);
             }
         });
+    if centered_menus {
+        let rect = bar.response.rect;
+        ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(rect.left(), rect.bottom() - 1.0), rect.right_bottom()), 0.0, t.chrome);
+    }
     // A click anywhere on the bar keeps a zoom being typed (zoom_field.rs).
     crate::zoom_field::set_title_bar_rect(ui.ctx(), bar.response.rect);
     if custom {

@@ -71,7 +71,7 @@ pub(crate) use color::{color_field, color_field_fill_id, field_chips, field_hsva
 pub(crate) use color::{hsva_color32, hsva_srgb, srgb_bytes};
 #[cfg(test)]
 pub(crate) use dock::DOCK_MIN_WIDTH;
-pub(crate) use dock::{canvas_panel, dock_body, dock_width_id, dock_width_range};
+pub(crate) use dock::{bubble_canvas_panel, bubble_frame_rect, canvas_panel, dock_body, dock_width_id, dock_width_range, floating_rail, rail_panel};
 pub use dock::{dock_area, request_dock_width};
 #[cfg(test)]
 use history::history;
@@ -101,6 +101,7 @@ pub use options_bar::options_bar;
 #[cfg(test)]
 use options_bar::options_bar_height;
 pub(crate) use options_bar::{FIXED_SIZE_MAX_PX, opt_label};
+pub(crate) use options_bar::{bubble_search_width, floating_options_bar, floating_search};
 pub use panel_state::{migrate_panel_state, panel_state_id, remember_panel_state};
 pub use properties::properties_window;
 #[cfg(test)]
@@ -111,6 +112,7 @@ use title_bar::title_x;
 pub use title_bar::{sync_window_title, system_title_bar, title_bar, window_title};
 #[cfg(test)]
 use toolbar::{STUDIO_CHIP, TOOL_SECTIONS, chips_height, color_chips, tool_flyout_drag_open, tool_flyout_release, toolbar_icon_size, visible_sections};
+pub(crate) use toolbar::{floating_toolbar, toolbar_width};
 pub use toolbar::{paint_toolbar_flyout_indicator, toolbar};
 
 fn c32(c: [f32; 4]) -> Color32 {

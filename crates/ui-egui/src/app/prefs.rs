@@ -32,6 +32,12 @@ impl PhotocraftApp {
     }
 
     pub(crate) fn apply_theme(&mut self, ctx: &egui::Context, kind: theme::ThemeKind) {
+        // The Bubble styles show the icon rail only until a panel is asked for, like the web UI.
+        if kind.is_bubble() {
+            self.ui.panels.dock = false;
+        } else if self.ui.theme.is_bubble() && self.ui.docking.is_none() {
+            self.ui.panels.dock = true;
+        }
         // Color and Swatches trade indices between Pro and Studio layouts.
         if let Some(selected) = dock::Group::Color.tabs(theme::Tokens::for_kind(self.ui.theme).pro).get(self.ui.dock_tabs.color)
             && let Some(tab) = dock::Group::Color.tabs(theme::Tokens::for_kind(kind).pro).iter().position(|name| name == selected)

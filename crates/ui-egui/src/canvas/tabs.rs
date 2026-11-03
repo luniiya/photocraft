@@ -56,7 +56,8 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         paint_dots(ui, ui.available_rect_before_wrap(), app.session.prefs().interface.show_canvas_dots);
         return;
     }
-    if !app.ui.view.hides_tabs() || opening {
+    let bottom_tabs = crate::theme::Tokens::get(ui.ctx()).glass.bottom_tabs;
+    if !bottom_tabs && (!app.ui.view.hides_tabs() || opening) {
         // Flat Spectrum tabs sit directly against the canvas. The parent's default vertical
         // item spacing would otherwise leave a visible gap below the tab strip (#2188).
         let spacing = ui.spacing().item_spacing.y;
@@ -105,6 +106,32 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     }
     let view = app.ui.views[idx].clone();
     canvas_view(app, ui, idx, rect, view, app.session.active_index() == Some(idx));
+    if bottom_tabs && (!app.ui.view.hides_tabs() || opening) {
+        let t = crate::theme::Tokens::get(ui.ctx());
+        let area = ui.max_rect();
+        let large_tabs = app.session.prefs().workspace.large_tabs;
+        let font = crate::theme::medium(if large_tabs { 14.0 } else { 12.5 });
+        let meta_font = egui::FontId::proportional(if large_tabs { 12.0 } else { 10.5 });
+        let content = docked_document_indices(app)
+            .iter()
+            .filter_map(|&doc| app.session.documents().get(doc))
+            .map(|st| {
+                ui.painter().layout_no_wrap(studio_tab_name(app, st), font.clone(), t.text).size().x
+                    + ui.painter().layout_no_wrap(format!("{}/{}", mode_label(&st.doc), st.doc.depth.bits()), meta_font.clone(), t.text_faint).size().x
+                    + STUDIO_TAB_PAD
+            })
+            .sum::<f32>()
+            + 16.0;
+        let left = t.glass.padding + if t.kind.is_bubble() && app.ui.panels.toolbar { crate::panels::toolbar_width(app) + 8.0 } else { 0.0 };
+        let width = content.max(120.0).min(area.width() - left - t.glass.padding);
+        let height = if large_tabs { 44.0 } else { 38.0 };
+        let bottom = if t.kind.is_bubble() { 12.0 } else { t.glass.padding };
+        let pos = egui::pos2(area.left() + left, area.bottom() - height - bottom);
+        let tab_rect = egui::Rect::from_min_size(pos, egui::vec2(width, height));
+        let mut tab_ui = ui.new_child(egui::UiBuilder::new().max_rect(tab_rect));
+        app.tab_strip = Some(tabs(app, &mut tab_ui));
+        drop_slot_line(app, ui);
+    }
 }
 
 /// The tab strip; returns where its document tabs are.
@@ -156,7 +183,17 @@ pub(super) fn tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
         .focus
         .and_then(|job| opening.iter().position(|(open, _, _)| *open == job))
         .map_or_else(|| app.session.active_index().and_then(|doc| documents.iter().position(|&d| d == doc)).unwrap_or(0), |p| tab_count + p);
-    let frame = egui::Frame::NONE.fill(t.canvas).inner_margin(egui::Margin { left: 8, right: 8, top: 6, bottom: 4 }).show(ui, |ui| {
+    let frame = if t.glass.bottom_tabs {
+        egui::Frame::NONE.fill(t.glass_card()).stroke(egui::Stroke::new(1.0, t.card_border)).corner_radius(t.radius_lg).inner_margin(egui::Margin {
+            left: 8,
+            right: 8,
+            top: 4,
+            bottom: 4,
+        })
+    } else {
+        egui::Frame::NONE.fill(t.canvas).inner_margin(egui::Margin { left: 8, right: 8, top: 6, bottom: 4 })
+    };
+    let frame = frame.show(ui, |ui| {
         let (row, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), tab_h), Sense::hover());
         let f = fit_doc_tabs(&natural, selected, row.width());
         let mut x = row.left();

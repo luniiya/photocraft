@@ -12,6 +12,8 @@
 //! - **Breeze** (Light and Dark): the Studio layout adapted to the look of KDE Plasma's Breeze
 //!   (blue-grey surfaces, Breeze blue accent, 5 px corners), so the app sits with the rest of a
 //!   Plasma desktop.
+//! - **Bubble** (Light and Dark): the Pro layout with very rounded controls, white cards and a
+//!   soft blue accent, modelled on PhotoCraft's light web interface.
 //!
 //! - **Pro (Light Gray)** and **Pro (Light)**: Photoshop's third and fourth interface brightness
 //!   levels (#B8B8B8 and #F0F0F0 panels) with the Pro layout (#2661).
@@ -52,10 +54,14 @@ pub enum ThemeKind {
     SoftDark,
     /// A low-contrast light theme: pale violet-grey surfaces, softened dark text and a periwinkle accent.
     SoftLight,
+    /// A light "bubble" style: pale grey workspace, white cards, very rounded controls and a soft blue accent.
+    BubbleLight,
+    /// The dark counterpart of [`ThemeKind::BubbleLight`].
+    BubbleDark,
 }
 
 impl ThemeKind {
-    pub const ALL: [ThemeKind; 14] = [
+    pub const ALL: [ThemeKind; 16] = [
         ThemeKind::Pro,
         ThemeKind::ProMedium,
         ThemeKind::ProLightGray,
@@ -70,6 +76,8 @@ impl ThemeKind {
         ThemeKind::BreezeDark,
         ThemeKind::SoftDark,
         ThemeKind::SoftLight,
+        ThemeKind::BubbleLight,
+        ThemeKind::BubbleDark,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -87,6 +95,8 @@ impl ThemeKind {
             ThemeKind::BreezeDark => "Breeze Dark",
             ThemeKind::SoftDark => "Soft Dark",
             ThemeKind::SoftLight => "Soft Light",
+            ThemeKind::BubbleLight => "Bubble (Light)",
+            ThemeKind::BubbleDark => "Bubble (Dark)",
         }
     }
     /// The canonical name: `ui.set {theme}` accepts it and the Window › Theme commands are
@@ -107,11 +117,17 @@ impl ThemeKind {
             ThemeKind::BreezeDark => "breezeDark",
             ThemeKind::SoftDark => "softDark",
             ThemeKind::SoftLight => "softLight",
+            ThemeKind::BubbleLight => "bubbleLight",
+            ThemeKind::BubbleDark => "bubbleDark",
         }
     }
     /// Photoshop-grammar layout (tab strips, flat panels): the four Pro brightness levels.
     pub fn is_pro(self) -> bool {
         matches!(self, ThemeKind::Pro | ThemeKind::ProMedium | ThemeKind::ProLightGray | ThemeKind::ProLight)
+    }
+    /// The light and dark Bubble styles: a uniform workspace with floating white cards.
+    pub fn is_bubble(self) -> bool {
+        matches!(self, ThemeKind::BubbleLight | ThemeKind::BubbleDark)
     }
     /// Whether this theme belongs to the dark appearance family.
     pub fn is_dark(self) -> bool {
@@ -124,6 +140,7 @@ impl ThemeKind {
                 | ThemeKind::AdwaitaDark
                 | ThemeKind::BreezeDark
                 | ThemeKind::SoftDark
+                | ThemeKind::BubbleDark
         )
     }
     /// Whether this theme belongs to the light appearance family.
@@ -150,15 +167,29 @@ impl ThemeKind {
             "breezedark" | "kdedark" | "plasmadark" => Some(ThemeKind::BreezeDark),
             "softdark" => Some(ThemeKind::SoftDark),
             "softlight" => Some(ThemeKind::SoftLight),
+            "bubble" | "bubblelight" | "bubbleglass" => Some(ThemeKind::BubbleLight),
+            "bubbledark" => Some(ThemeKind::BubbleDark),
             _ => None,
         }
     }
+}
+
+/// Bubble-style chrome: floating glass cards over the canvas.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Glass {
+    pub floating: bool,
+    pub centered_menus: bool,
+    pub bottom_tabs: bool,
+    pub outer_frame: bool,
+    pub card_alpha: u8,
+    pub padding: f32,
 }
 
 /// Colour and shape tokens.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tokens {
     pub kind: ThemeKind,
+    pub glass: Glass,
     /// Window chrome (title bar, toolbars).
     pub chrome: Color32,
     /// Canvas surround.
@@ -219,11 +250,28 @@ impl Tokens {
         [Color32::from_black_alpha(160), Color32::from_white_alpha(235)]
     }
 
+    /// The translucent card fill used by the Bubble chrome; opaque for every other theme.
+    pub fn glass_card(self) -> Color32 {
+        let alpha = if self.glass.card_alpha == 0 { 255 } else { self.glass.card_alpha };
+        Color32::from_rgba_unmultiplied(self.card.r(), self.card.g(), self.card.b(), alpha)
+    }
+
+    pub fn glass_menu(self) -> Color32 {
+        let fill = self.glass_card();
+        let alpha = if self.glass.centered_menus { 235 } else { fill.a() };
+        Color32::from_rgba_unmultiplied(fill.r(), fill.g(), fill.b(), alpha)
+    }
+
+    pub fn frame_radius(self) -> f32 {
+        if self.kind.is_bubble() { 20.0 } else { self.radius_lg }
+    }
+
     pub fn for_kind(kind: ThemeKind) -> Self {
         match kind {
             // Sampled from Photoshop 2026's default brightness (raw display values).
             ThemeKind::ProMedium => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(83, 83, 83),
                 dock: Color32::from_rgb(66, 66, 66),
                 card: Color32::from_rgb(83, 83, 83),
@@ -245,6 +293,7 @@ impl Tokens {
             // Photoshop's medium-light brightness: #B8B8B8 panels, dark text, a mid-grey canvas.
             ThemeKind::ProLightGray => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(184, 184, 184),
                 canvas: Color32::from_rgb(160, 160, 160),
                 canvas_dot: Color32::from_rgb(160, 160, 160),
@@ -270,6 +319,7 @@ impl Tokens {
             // Photoshop's lightest brightness: #F0F0F0 panels, dark text, a light-grey canvas.
             ThemeKind::ProLight => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(240, 240, 240),
                 canvas: Color32::from_rgb(214, 214, 214),
                 canvas_dot: Color32::from_rgb(214, 214, 214),
@@ -294,6 +344,7 @@ impl Tokens {
             },
             ThemeKind::Pro => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(50, 50, 50),
                 canvas: Color32::from_rgb(40, 40, 40),
                 canvas_dot: Color32::from_rgb(40, 40, 40),
@@ -334,6 +385,7 @@ impl Tokens {
             },
             ThemeKind::Studio => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(20, 20, 21),
                 canvas: Color32::from_rgb(14, 14, 15),
                 canvas_dot: Color32::from_rgb(46, 46, 50),
@@ -376,6 +428,7 @@ impl Tokens {
             },
             ThemeKind::StudioLight => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(246, 246, 248),
                 canvas: Color32::from_rgb(226, 226, 230),
                 canvas_dot: Color32::from_rgb(200, 200, 206),
@@ -416,6 +469,7 @@ impl Tokens {
             },
             ThemeKind::Classic => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(212, 208, 200),
                 canvas: Color32::from_rgb(128, 128, 128),
                 canvas_dot: Color32::from_rgb(128, 128, 128),
@@ -459,6 +513,7 @@ impl Tokens {
             // button is a neutral circle, not a red one, so the caption colours stay grey.
             ThemeKind::Adwaita => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::WHITE,
                 canvas: Color32::from_rgb(222, 222, 223),
                 canvas_dot: Color32::from_rgb(222, 222, 223),
@@ -499,6 +554,7 @@ impl Tokens {
             },
             ThemeKind::AdwaitaDark => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(46, 46, 50),
                 canvas: Color32::from_rgb(29, 29, 32),
                 canvas_dot: Color32::from_rgb(29, 29, 32),
@@ -545,6 +601,7 @@ impl Tokens {
             // deeper blue that takes white text.
             ThemeKind::BreezeLight => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(219, 222, 226),
                 canvas: Color32::from_rgb(219, 222, 226),
                 canvas_dot: Color32::from_rgb(219, 222, 226),
@@ -595,6 +652,7 @@ impl Tokens {
             // white text. Outlines and those steps are our own tints.
             ThemeKind::BreezeDark => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(38, 42, 48),
                 canvas: Color32::from_rgb(17, 20, 24),
                 canvas_dot: Color32::from_rgb(17, 20, 24),
@@ -638,6 +696,7 @@ impl Tokens {
             // text colours still hold 4.5:1 on every surface (checked by the tests).
             ThemeKind::SoftDark => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(58, 58, 68),
                 canvas: Color32::from_rgb(40, 40, 48),
                 canvas_dot: Color32::from_rgb(40, 40, 48),
@@ -680,6 +739,7 @@ impl Tokens {
             // periwinkle accent, with the same generous radii as Soft Dark.
             ThemeKind::SoftLight => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(232, 230, 236),
                 canvas: Color32::from_rgb(218, 216, 224),
                 canvas_dot: Color32::from_rgb(218, 216, 224),
@@ -718,11 +778,96 @@ impl Tokens {
                 caption_close_text: Color32::WHITE,
                 scrim: Color32::from_black_alpha(90),
             },
+            // Bubble Light matches Photobloom's neutral workspace and lavender glass HUD.
+            ThemeKind::BubbleLight => Tokens {
+                kind,
+                glass: Glass { floating: true, centered_menus: true, bottom_tabs: true, outer_frame: true, card_alpha: 199, padding: 20.0 },
+                chrome: Color32::from_rgb(240, 240, 243),
+                canvas: Color32::from_rgb(230, 230, 230),
+                canvas_dot: Color32::from_rgb(230, 230, 230),
+                dock: Color32::from_rgb(244, 244, 247),
+                card: Color32::from_rgb(250, 250, 252),
+                card_border: Color32::from_rgba_unmultiplied(20, 20, 28, 28),
+                field: Color32::from_rgb(244, 244, 247),
+                field_border: Color32::from_rgba_unmultiplied(20, 20, 28, 46),
+                hover: Color32::from_rgba_unmultiplied(20, 20, 28, 12),
+                pressed: Color32::from_rgba_unmultiplied(118, 82, 181, 48),
+                text: Color32::from_rgb(27, 27, 32),
+                text_dim: Color32::from_rgb(83, 81, 91),
+                text_faint: Color32::from_rgb(117, 113, 126),
+                icon: Color32::from_rgb(54, 52, 61),
+                accent: Color32::from_rgb(118, 82, 181),
+                accent_soft: Color32::from_rgba_unmultiplied(118, 82, 181, 36),
+                accent_border: Color32::from_rgba_unmultiplied(118, 82, 181, 90),
+                accent_text: Color32::from_rgb(118, 82, 181),
+                separator: Color32::from_rgba_unmultiplied(20, 20, 28, 24),
+                shadow: Color32::from_rgba_unmultiplied(30, 25, 45, 40),
+                primary_bg: Color32::from_rgb(118, 82, 181),
+                primary_text: Color32::WHITE,
+                danger: Color32::from_rgb(192, 57, 43),
+                warning: Color32::from_rgb(138, 90, 0),
+                radius_sm: 8.0,
+                radius: 10.0,
+                radius_lg: 14.0,
+                bevel: false,
+                pro: false,
+                round_chips: true,
+                tab_strip: Color32::TRANSPARENT,
+                row_selected: Color32::TRANSPARENT,
+                histogram_bg: Color32::from_rgb(42, 44, 48),
+                histogram_level: 240,
+                caption_close: Color32::from_rgb(192, 57, 43),
+                caption_close_text: Color32::WHITE,
+                scrim: Color32::from_black_alpha(90),
+            },
+            // Bubble Dark: the same floating cards and pill controls on a deep neutral grey.
+            ThemeKind::BubbleDark => Tokens {
+                kind,
+                glass: Glass { floating: true, centered_menus: true, bottom_tabs: true, outer_frame: true, card_alpha: 199, padding: 20.0 },
+                chrome: Color32::from_rgb(28, 28, 32),
+                canvas: Color32::from_rgb(28, 28, 32),
+                canvas_dot: Color32::from_rgb(28, 28, 32),
+                dock: Color32::from_rgb(35, 35, 39),
+                card: Color32::from_rgb(28, 28, 32),
+                card_border: Color32::from_rgba_unmultiplied(255, 255, 255, 26),
+                field: Color32::from_rgb(35, 35, 39),
+                field_border: Color32::from_rgba_unmultiplied(255, 255, 255, 41),
+                hover: Color32::from_rgba_unmultiplied(255, 255, 255, 14),
+                pressed: Color32::from_rgba_unmultiplied(167, 139, 250, 54),
+                text: Color32::from_rgb(243, 243, 246),
+                text_dim: Color32::from_rgb(184, 181, 193),
+                text_faint: Color32::from_rgb(145, 140, 156),
+                icon: Color32::from_rgb(218, 214, 226),
+                accent: Color32::from_rgb(167, 139, 250),
+                accent_soft: Color32::from_rgba_unmultiplied(167, 139, 250, 46),
+                accent_border: Color32::from_rgba_unmultiplied(167, 139, 250, 110),
+                accent_text: Color32::from_rgb(167, 139, 250),
+                separator: Color32::from_rgba_unmultiplied(255, 255, 255, 24),
+                shadow: Color32::from_black_alpha(110),
+                primary_bg: Color32::from_rgb(167, 139, 250),
+                primary_text: Color32::from_rgb(15, 17, 21),
+                danger: Color32::from_rgb(248, 113, 113),
+                warning: Color32::from_rgb(242, 196, 107),
+                radius_sm: 8.0,
+                radius: 10.0,
+                radius_lg: 14.0,
+                bevel: false,
+                pro: false,
+                round_chips: true,
+                tab_strip: Color32::TRANSPARENT,
+                row_selected: Color32::TRANSPARENT,
+                histogram_bg: Color32::from_rgb(23, 24, 27),
+                histogram_level: 230,
+                caption_close: Color32::from_rgb(213, 83, 94),
+                caption_close_text: Color32::WHITE,
+                scrim: Color32::from_black_alpha(110),
+            },
             // Ethan Schoonover's Solarized Dark palette: base03 canvas, base02 surfaces, base0
             // body text and the Solarized blue accent. https://ethanschoonover.com/solarized/
             // (MIT; see LICENSE-solarized.txt)
             ThemeKind::SolarizedDark => Tokens {
                 kind,
+                glass: Glass::default(),
                 chrome: Color32::from_rgb(7, 54, 66),
                 canvas: Color32::from_rgb(0, 43, 54),
                 canvas_dot: Color32::from_rgb(10, 61, 74),
@@ -1088,7 +1233,11 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
         let mut scroll = if t.bevel { egui::style::ScrollStyle::solid() } else { egui::style::ScrollStyle::thin() };
         if scroll.floating {
             scroll.interact_handle_opacity = 1.0;
-            scroll.interact_background_opacity = 0.4;
+            scroll.interact_background_opacity = if t.kind.is_bubble() { 0.0 } else { 0.4 };
+            if t.kind.is_bubble() {
+                scroll.dormant_background_opacity = 0.0;
+                scroll.active_background_opacity = 0.0;
+            }
             scroll.floating_width = 4.0;
         }
         s.spacing.scroll = scroll;
